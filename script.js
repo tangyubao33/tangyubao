@@ -143,8 +143,8 @@ const readingSlide = {
       radius: 1,
       muted: true,
       loop: false,
-      controls: "native",
-      soundHint: "注意检查电脑音量后，可取消静音播放"
+      soundHint: "注意检查电脑音量后，可取消静音播放",
+      autoplay: true
     }
   ]
 };
@@ -235,9 +235,10 @@ const bytedanceOtherSlides = bytedanceOtherOrder.map((fileNumber, index) => {
           objectPosition: "top",
           radius: 1.6,
           radiusCorners: { tl: 1.6, tr: 1.6, br: 0, bl: 0 },
-          muted: false,
+          muted: true,
           loop: false,
-          controls: "native"
+          soundHint: "注意检查电脑音量后，可取消静音播放",
+          autoplay: true
         }
       ]
     };
@@ -276,9 +277,10 @@ bytedanceAiCoverSlides[5] = {
       objectPosition: "top",
       radius: 1.06,
       radiusCorners: { tl: 1.06, tr: 1.06, br: 0, bl: 0 },
-      muted: false,
+      muted: true,
       loop: false,
-      controls: "native"
+      soundHint: "注意检查电脑音量后，可取消静音播放",
+      autoplay: true
     }
   ]
 };
@@ -307,9 +309,10 @@ bytedanceAiCoverSlides[6] = {
     box: { x: item.x, y: item.y, w: item.w, h: item.h },
     fit: "cover",
     radius: item.radius,
-    muted: false,
+    muted: true,
     loop: false,
-    controls: "native"
+    soundHint: "注意检查电脑音量后，可取消静音播放",
+    autoplay: true
   }))
 };
 // Pages 1-4 print the deployed product URL in their caption; a transparent
@@ -979,6 +982,7 @@ function placeArtwork(slide) {
   elements.artwork.alt = slide.alt || "";
   renderSlideLinks(slide);
   renderOverlays(slide);
+  startSlideMedia(slide);
   if (elements.artwork.complete) ready();
 }
 
@@ -987,17 +991,39 @@ function placeArtwork(slide) {
    on first click and its src is only attached then, so a page with three
    demos costs three small JPEGs until the visitor actually plays one. */
 
-const mediaVideoPlaying = new Set();
+/* ---- composite page media ------------------------------------------------
+   Each box starts as a poster + play button; the <video> element is created on
+   first play and only then gets a src, so an idle video page costs just the
+   poster JPEG. Playback uses the site's own control bar (play/pause, progress,
+   mute) instead of the browser one: these frames are small and heavily scaled,
+   and owning the bar keeps the muted hint bubble exactly on the mute button.
+   Video pages autoplay muted (the only autoplay browsers allow) and hand over
+   to the next demo on the same page, left to right. */
+
+const MEDIA_ICON = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.279 20.99c-1.25.686-2.779-.217-2.779-1.643V5.653Z"></path></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7.5 4.5c-.83 0-1.5.67-1.5 1.5v12c0 .83.67 1.5 1.5 1.5h1.2c.83 0 1.5-.67 1.5-1.5V6c0-.83-.67-1.5-1.5-1.5H7.5Zm7.8 0c-.83 0-1.5.67-1.5 1.5v12c0 .83.67 1.5 1.5 1.5h1.2c.83 0 1.5-.67 1.5-1.5V6c0-.83-.67-1.5-1.5-1.5h-1.2Z"></path></svg>',
+  muted: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11.55 4.24a.9.9 0 0 0-1.44-.72L6.1 6.9H4.5a1.5 1.5 0 0 0-1.5 1.5v7.2a1.5 1.5 0 0 0 1.5 1.5h1.6l4.01 3.38a.9.9 0 0 0 1.44-.72V4.24Zm3.98 5.23a.9.9 0 0 1 1.27 0L18.5 11.17l1.7-1.7a.9.9 0 1 1 1.27 1.27l-1.7 1.7 1.7 1.7a.9.9 0 0 1-1.27 1.27l-1.7-1.7-1.7 1.7a.9.9 0 0 1-1.27-1.27l1.7-1.7-1.7-1.7a.9.9 0 0 1 0-1.27Z"></path></svg>',
+  sound: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M11.55 4.24a.9.9 0 0 0-1.44-.72L6.1 6.9H4.5a1.5 1.5 0 0 0-1.5 1.5v7.2a1.5 1.5 0 0 0 1.5 1.5h1.6l4.01 3.38a.9.9 0 0 0 1.44-.72V4.24Z"></path><path fill="currentColor" d="M15.1 8.4a5.4 5.4 0 0 1 0 7.2.9.9 0 0 0 1.34 1.2 7.2 7.2 0 0 0 0-9.6.9.9 0 1 0-1.34 1.2Z"></path><path fill="currentColor" d="M17.8 5.6a9 9 0 0 1 0 12.8.9.9 0 0 0 1.3 1.25 10.8 10.8 0 0 0 0-15.3.9.9 0 0 0-1.3 1.25Z"></path></svg>'
+};
+
+const mediaState = {
+  slide: null,
+  queue: [],
+  soundOn: false,
+  hintShown: false,
+  idleTimer: 0
+};
 
 function resetMediaBoxes() {
   const canvas = elements.slideCanvas;
   if (!canvas) return;
+  stopSlideMedia();
   canvas.querySelectorAll("video").forEach((video) => {
     try { video.pause(); } catch { /* ignore */ }
     video.removeAttribute("src");
     video.load();
   });
-  mediaVideoPlaying.clear();
   canvas.innerHTML = "";
   canvas.hidden = true;
   canvas.style.opacity = "";
@@ -1009,76 +1035,326 @@ function pauseAllMedia() {
   });
 }
 
+function mediaBoxes() {
+  return [...(elements.slideCanvas?.querySelectorAll(".media-box") || [])];
+}
+
+function slideVideoOverlays(slide) {
+  if (!isComposite(slide)) return [];
+  return (slide.overlays || [])
+    .filter((overlay) => overlay && overlay.kind === "video" && overlay.box)
+    .sort((a, b) => a.box.x - b.box.x);
+}
+
+function startSlideMedia(slide) {
+  stopSlideMedia();
+  mediaState.hintShown = false;
+  if (state.screen !== "viewer") return;
+  const overlays = slideVideoOverlays(slide).filter((overlay) => overlay.autoplay !== false);
+  if (!overlays.length) return;
+  mediaState.slide = slide;
+  mediaState.queue = overlays.slice();
+  playNextSlideMedia();
+}
+
+function stopSlideMedia() {
+  window.clearTimeout(mediaState.idleTimer);
+  mediaState.slide = null;
+  mediaState.queue = [];
+  pauseAllMedia();
+  mediaBoxes().forEach((box) => {
+    box.dataset.playing = "false";
+    box.classList.remove("is-loading", "is-playing");
+    hideControls(box);
+    hideSoundHint(box);
+    box.querySelector(".media-play")?.classList.remove("is-hidden");
+  });
+}
+
+function playNextSlideMedia() {
+  const overlay = mediaState.queue.shift();
+  if (!overlay) return;
+  const box = elements.slideCanvas?.querySelector(`.media-box[data-media-id="${overlay.id}"]`);
+  if (!box) {
+    playNextSlideMedia();
+    return;
+  }
+  startMedia(box, overlay, { auto: true });
+}
+
+function showControls(box) {
+  const bar = box.querySelector(".media-controls");
+  if (!bar) return;
+  bar.classList.add("is-visible");
+  window.clearTimeout(box._controlsTimer);
+  box._controlsTimer = window.setTimeout(() => {
+    if (box.dataset.playing === "true") bar.classList.remove("is-visible");
+  }, 2600);
+}
+
+function revealControls(box) {
+  const bar = box.querySelector(".media-controls");
+  if (!bar) return;
+  bar.classList.add("is-visible");
+  window.clearTimeout(box._controlsTimer);
+  if (box.dataset.playing === "true") {
+    box._controlsTimer = window.setTimeout(() => bar.classList.remove("is-visible"), 2600);
+  }
+}
+
+function hideControls(box) {
+  window.clearTimeout(box._controlsTimer);
+  box.querySelector(".media-controls")?.classList.remove("is-visible");
+}
+
 function hideSoundHint(box) {
-  const hint = box?.querySelector(".media-sound-hint");
+  const hint = box?._soundHint;
   if (!hint) return;
   window.clearTimeout(hint._hideTimer);
   hint.classList.remove("is-visible");
 }
 
-function showSoundHint(box, overlay) {
-  const hint = box?.querySelector(".media-sound-hint");
-  if (!hint || !overlay.soundHint) return;
+/* The bubble lives on the slide canvas, not inside the media box: these frames
+   can be narrower than the sentence, and the box clips its content. It is
+   anchored from the box rectangle to the control bar's mute button so it lines
+   up at every frame size. */
+function showSoundHint(box) {
+  const hint = box?._soundHint;
+  const canvas = elements.slideCanvas;
+  if (!hint || !canvas) return;
+  // once per page is enough: a page with three demos should not flash the same
+  // hint three times while they hand over to each other
+  if (mediaState.hintShown) return;
+  mediaState.hintShown = true;
+  const canvasRect = canvas.getBoundingClientRect();
+  const boxRect = box.getBoundingClientRect();
+  const barPad = 8;
+  const button = 24;
+  const barHeight = barPad * 2 + button;
+  const muteCenter = barPad + button / 2;
+  hint.style.right = `${(canvasRect.right - boxRect.right) + barPad - 4}px`;
+  hint.style.bottom = `${(canvasRect.bottom - boxRect.bottom) + barHeight + 8}px`;
+  hint.style.setProperty("--media-hint-tail", `${muteCenter - barPad + 4 - 4.5}px`);
   window.clearTimeout(hint._hideTimer);
-  hint.hidden = false;
   window.requestAnimationFrame(() => hint.classList.add("is-visible"));
-  hint._hideTimer = window.setTimeout(() => {
-    hint.classList.remove("is-visible");
-  }, 7000);
+  hint._hideTimer = window.setTimeout(() => hint.classList.remove("is-visible"), 7000);
 }
 
-function startVideo(box, overlay, button) {
-  if (box.dataset.playing === "true") return;
-  // one playing demo per page: starting a second one pauses the first
-  elements.slideCanvas?.querySelectorAll("video").forEach((other) => {
-    if (other === box.querySelector("video")) return;
-    try { other.pause(); } catch { /* ignore */ }
-    const otherBox = other.closest(".media-box");
-    if (otherBox) otherBox.dataset.playing = "false";
+function updateMediaUi(box, video) {
+  if (!video) return;
+  const toggle = box.querySelector(".media-toggle");
+  const mute = box.querySelector(".media-mute");
+  const progress = box.querySelector(".media-progress");
+  if (toggle) {
+    const playing = !video.paused && !video.ended;
+    toggle.innerHTML = playing ? MEDIA_ICON.pause : MEDIA_ICON.play;
+    toggle.setAttribute("aria-label", playing ? "暂停" : "播放");
+  }
+  if (mute) {
+    mute.innerHTML = video.muted ? MEDIA_ICON.muted : MEDIA_ICON.sound;
+    mute.setAttribute("aria-label", video.muted ? "取消静音" : "静音");
+  }
+  if (progress && Number.isFinite(video.duration) && video.duration > 0) {
+    const ratio = Math.min(1, video.currentTime / video.duration);
+    progress.querySelector(".media-progress-fill").style.width = `${(ratio * 100).toFixed(2)}%`;
+    progress.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+  }
+}
+
+function toggleMedia(box) {
+  const video = box.querySelector("video");
+  if (!video) return;
+  if (video.paused) playMedia(box);
+  else video.pause();
+}
+
+function toggleMute(box) {
+  const video = box.querySelector("video");
+  if (!video) return;
+  video.muted = !video.muted;
+  mediaState.soundOn = !video.muted;
+}
+
+function seekFromEvent(box, progress, event) {
+  const video = box.querySelector("video");
+  if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
+  const rect = progress.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+  video.currentTime = ratio * video.duration;
+  updateMediaUi(box, video);
+}
+
+function buildMediaControls(box, overlay) {
+  const bar = document.createElement("div");
+  bar.className = "media-controls";
+  bar.setAttribute("role", "group");
+  bar.setAttribute("aria-label", "视频控件");
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "media-toggle";
+  toggle.innerHTML = MEDIA_ICON.play;
+  toggle.setAttribute("aria-label", "播放");
+
+  const progress = document.createElement("div");
+  progress.className = "media-progress";
+  progress.tabIndex = 0;
+  progress.setAttribute("role", "slider");
+  progress.setAttribute("aria-label", "播放进度");
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+  progress.setAttribute("aria-valuenow", "0");
+  progress.innerHTML = '<span class="media-progress-fill"></span>';
+
+  const mute = document.createElement("button");
+  mute.type = "button";
+  mute.className = "media-mute";
+  mute.innerHTML = MEDIA_ICON.muted;
+  mute.setAttribute("aria-label", "取消静音");
+
+  bar.append(toggle, progress, mute);
+  box.append(bar);
+
+  toggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleMedia(box);
+  });
+  mute.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleMute(box);
+  });
+  progress.addEventListener("click", (event) => {
+    event.stopPropagation();
+    seekFromEvent(box, progress, event);
+  });
+  progress.addEventListener("keydown", (event) => {
+    const video = box.querySelector("video");
+    if (!video || !Number.isFinite(video.duration)) return;
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      video.currentTime = Math.min(video.duration, Math.max(0, video.currentTime + (event.key === "ArrowRight" ? 2 : -2)));
+      updateMediaUi(box, video);
+    }
+  });
+  bar.addEventListener("pointerdown", (event) => event.stopPropagation());
+  bar.addEventListener("click", (event) => event.stopPropagation());
+
+  // clicking the picture itself toggles playback once the demo has started
+  box.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest(".media-controls, .media-play")) return;
+    const video = box.querySelector("video");
+    if (!video) return;
+    toggleMedia(box);
+  });
+  // keep the bar on screen while the pointer moves over the frame
+  box.addEventListener("pointermove", () => {
+    if (box.dataset.playing === "true") revealControls(box);
+  });
+  return bar;
+}
+
+function bindMediaVideo(box, overlay, video) {
+  video.addEventListener("playing", () => {
+    box.classList.remove("is-loading");
+    box.dataset.playing = "true";
+    box.classList.add("is-playing");
+    box.querySelector(".media-play")?.classList.add("is-hidden");
+    showControls(box);
+    updateMediaUi(box, video);
+    if (video.muted) showSoundHint(box);
+    else hideSoundHint(box);
+  });
+  video.addEventListener("pause", () => {
+    if (video.ended) return;
+    box.classList.remove("is-loading");
+    updateMediaUi(box, video);
+    revealControls(box);
+    hideSoundHint(box);
+  });
+  video.addEventListener("waiting", () => box.classList.add("is-loading"));
+  video.addEventListener("timeupdate", () => updateMediaUi(box, video));
+  video.addEventListener("loadedmetadata", () => updateMediaUi(box, video));
+  video.addEventListener("durationchange", () => updateMediaUi(box, video));
+  video.addEventListener("volumechange", () => {
+    updateMediaUi(box, video);
+    if (video.muted) {
+      if (box.dataset.playing === "true") showSoundHint(box);
+    } else {
+      hideSoundHint(box);
+    }
+  });
+  video.addEventListener("ended", () => {
+    box.dataset.playing = "false";
+    box.classList.remove("is-playing", "is-loading");
+    hideControls(box);
+    hideSoundHint(box);
+    box.querySelector(".media-play")?.classList.remove("is-hidden");
+    updateMediaUi(box, video);
+    // hand over to the next demo on the page (left to right)
+    if (mediaState.slide && mediaState.queue.length) playNextSlideMedia();
+  });
+}
+
+function startMedia(box, overlay, options = {}) {
+  const auto = Boolean(options.auto);
+  if (!auto) mediaState.queue = [];
+  mediaBoxes().forEach((other) => {
+    if (other === box) return;
+    const otherVideo = other.querySelector("video");
+    if (!otherVideo) return;
+    try { otherVideo.pause(); } catch { /* ignore */ }
+    other.dataset.playing = "false";
+    other.classList.remove("is-playing");
+    hideControls(other);
+    hideSoundHint(other);
+    other.querySelector(".media-play")?.classList.remove("is-hidden");
   });
   box.classList.add("is-loading");
+  // hide the big play affordance right away: the spinner is the only loading
+  // indicator, otherwise the ▶ circle and the spinner stack on the same spot
+  box.querySelector(".media-play")?.classList.add("is-hidden");
   let video = box.querySelector("video");
   if (!video) {
     video = document.createElement("video");
     video.className = "media-video";
-    video.muted = overlay.muted === true;
     video.volume = 1;
     video.loop = Boolean(overlay.loop);
     video.playsInline = true;
-    video.preload = "none";
-    video.controls = overlay.controls !== "off";
+    video.preload = "auto";
     video.setAttribute("playsinline", "");
+    video.setAttribute("aria-label", overlay.label || "演示视频");
     if (overlay.poster) video.poster = overlay.poster;
-    video.addEventListener("playing", () => {
-      box.classList.remove("is-loading");
-      box.dataset.playing = "true";
-      button.classList.add("is-hidden");
-      if (video.muted) showSoundHint(box, overlay);
-      else hideSoundHint(box);
-    });
-    video.addEventListener("volumechange", () => {
-      if (video.muted) {
-        if (box.dataset.playing === "true") showSoundHint(box, overlay);
-      } else {
-        hideSoundHint(box);
-      }
-    });
-    video.addEventListener("pause", () => hideSoundHint(box));
-    video.addEventListener("waiting", () => box.classList.add("is-loading"));
-    video.addEventListener("ended", () => {
-      box.dataset.playing = "false";
-      button.classList.remove("is-hidden");
-      hideSoundHint(box);
-    });
+    bindMediaVideo(box, overlay, video);
     box.append(video);
   }
+  box.dataset.playing = "false";
   if (!video.src) video.src = overlay.src;
   if (video.readyState < 2) video.load();
-  const started = video.play();
-  if (started?.catch) {
-    started.catch(() => {
+  updateMediaUi(box, video);
+  // muted first (autoplay policy); once the visitor has unmuted a demo, keep
+  // their preference for the next one and fall back to muted if it is refused
+  video.muted = auto || !mediaState.soundOn;
+  const attempt = video.play();
+  if (attempt?.catch) {
+    attempt.catch(() => {
+      if (!video.muted) {
+        video.muted = true;
+        video.play().catch(() => { /* ignore */ });
+      }
       box.classList.remove("is-loading");
-      button.classList.remove("is-hidden");
+      box.querySelector(".media-play")?.classList.remove("is-hidden");
+    });
+  }
+}
+
+function playMedia(box) {
+  const video = box.querySelector("video");
+  if (!video) return;
+  const attempt = video.play();
+  if (attempt?.catch) {
+    attempt.catch(() => {
+      video.muted = true;
+      video.play().catch(() => { /* ignore */ });
     });
   }
 }
@@ -1166,18 +1442,22 @@ function renderOverlays(slide) {
     button.className = "media-play";
     button.type = "button";
     button.setAttribute("aria-label", `播放视频：${overlay.label || "页面演示"}`);
-    button.innerHTML = '<span class="media-play-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.279 20.99c-1.25.686-2.779-.217-2.779-1.643V5.653Z"></path></svg></span>';
-    button.addEventListener("click", () => startVideo(box, overlay, button));
+    button.innerHTML = `<span class="media-play-icon" aria-hidden="true">${MEDIA_ICON.play}</span>`;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      startMedia(box, overlay);
+    });
     box.append(button);
+    buildMediaControls(box, overlay);
+    canvas.append(box);
     if (overlay.soundHint) {
       const hint = document.createElement("div");
       hint.className = "media-sound-hint";
       hint.setAttribute("role", "status");
       hint.textContent = overlay.soundHint;
-      hint.hidden = true;
-      box.append(hint);
+      box._soundHint = hint;
+      canvas.append(hint);
     }
-    canvas.append(box);
   });
 }
 
@@ -1259,7 +1539,10 @@ function moveArtwork(slide, direction) {
         elements.artwork.style.transition = "";
         elements.artwork.style.transform = "";
         renderSlideLinks(slide);
-        if (isComposite(slide)) renderOverlays(slide);
+        if (isComposite(slide)) {
+          renderOverlays(slide);
+          startSlideMedia(slide);
+        }
         markArtworkReady();
       }, duration + 40);
     });
@@ -1850,12 +2133,20 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-let swipeStartY = 0;
-elements.artworkFrame.addEventListener("pointerdown", (event) => { swipeStartY = event.clientY; });
+let swipeStartY = null;
+// Media boxes own their pointer gestures (video controls, the big play button,
+// clicking the picture to pause). Recording their pointerdown would otherwise
+// leave a stale row and the following pointerup could be read as a page swipe.
+elements.artworkFrame.addEventListener("pointerdown", (event) => {
+  swipeStartY = event.target instanceof Element && event.target.closest(".media-box") ? null : event.clientY;
+}, true);
 elements.artworkFrame.addEventListener("pointerup", (event) => {
+  if (swipeStartY == null) return;
   const distance = swipeStartY - event.clientY;
+  swipeStartY = null;
   if (Math.abs(distance) > 60) navigateViewer(distance > 0 ? 1 : -1);
 });
+elements.artworkFrame.addEventListener("pointercancel", () => { swipeStartY = null; });
 
 const viewerElement = elements.screens.find((screen) => screen.dataset.screen === "viewer");
 let viewerWheelDelta = 0;

@@ -386,6 +386,38 @@ body[data-screen="viewer"] .site-header { grid-template-columns: auto minmax(0, 
   fill: currentColor;
   overflow: visible;
 }
+/* Site-owned video controls (the native bar is replaced: it does not scale with
+   these very small frames and cannot be anchored from CSS). */
+.media-controls {
+  position: absolute; z-index: 4; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px;
+  background: linear-gradient(180deg, rgba(6, 8, 11, 0) 0%, rgba(6, 8, 11, .55) 58%, rgba(6, 8, 11, .8) 100%);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .22s ease, visibility .22s;
+}
+.media-controls.is-visible { opacity: 1; visibility: visible; pointer-events: auto; }
+.media-controls button {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%;
+  color: #fff; background: rgba(8, 10, 14, .46); cursor: pointer;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: background .2s ease;
+}
+.media-controls button:hover { background: rgba(8, 10, 14, .74); }
+.media-controls button svg { width: 11px; height: 11px; fill: currentColor; }
+.media-progress {
+  position: relative; flex: 1 1 auto; height: 16px; margin: 0 2px;
+  cursor: pointer; outline-offset: 2px;
+}
+.media-progress::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px;
+  margin-top: -1.5px; border-radius: 2px; background: rgba(255, 255, 255, .28);
+}
+.media-progress-fill {
+  position: absolute; left: 0; top: 50%; width: 0; height: 3px; margin-top: -1.5px;
+  border-radius: 2px; background: #fff;
+}
 .media-box.is-loading::after {
   content: ""; position: absolute; z-index: 4; left: 50%; top: 50%;
   width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
@@ -814,9 +846,9 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 .media-sound-hint {
   position: absolute;
   z-index: 5;
-  right: 48px;
-  bottom: 60px;
-  max-width: min(260px, calc(100% - 168px));
+  right: 16px;
+  bottom: 68px;
+  max-width: min(280px, calc(100% - 40px));
   padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, .16);
   border-radius: 7px;
@@ -827,17 +859,19 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   letter-spacing: .01em;
   pointer-events: none;
   opacity: 0;
+  visibility: hidden;
   transform: translateY(4px);
-  transition: opacity .25s ease, transform .25s ease;
+  transition: opacity .25s ease, visibility .25s, transform .25s ease;
 }
 .media-sound-hint.is-visible {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0);
 }
 .media-sound-hint::after {
   content: "";
   position: absolute;
-  right: 74px;
+  right: var(--media-hint-tail, 12px);
   bottom: -5px;
   width: 9px;
   height: 9px;
