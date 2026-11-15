@@ -267,9 +267,15 @@ bytedanceAiCoverSlides[5] = {
       label: "AI 封面 · 产品端体验链路",
       src: "assets/video/ai-cover-39-demo.mp4",
       poster: "assets/video/ai-cover-39-demo-poster.jpg",
-      box: { x: 8.63, y: 30.69, w: 18.87, h: 70 },
+      // box = the phone frame's inner screen rect measured on 06.jpg
+      // (inner x 513..1584, inner top 994 of 5760x3240), so the recording sits
+      // inside the drawn border instead of covering it; objectPosition top keeps
+      // the app's status bar flush with the frame's top edge.
+      box: { x: 8.91, y: 30.68, w: 18.59, h: 70 },
       fit: "cover",
-      radius: 1.3,
+      objectPosition: "top",
+      radius: 1.06,
+      radiusCorners: { tl: 1.06, tr: 1.06, br: 0, bl: 0 },
       muted: false,
       loop: false,
       controls: "native"
