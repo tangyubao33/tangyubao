@@ -560,9 +560,9 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 .group-company { color: #f0f0ed; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: clamp(12px, 1.05vw, 16px); font-weight: 500; letter-spacing: -.01em; text-transform: uppercase; }
 .group-copy strong { color: #b4b8be; font-size: clamp(10px, .85vw, 12px); font-weight: 450; letter-spacing: .03em; line-height: 1.35; }
 .group-copy small { color: #8a929e; font-size: clamp(10px, .85vw, 12px); letter-spacing: .06em; line-height: 1.35; }
-.group-projects { --stream-card-width: clamp(210px, 18vw, 324px); grid-row: 1; display: flex; align-items: stretch; gap: var(--group-gap); width: var(--group-width); min-height: 0; transition: width .65s cubic-bezier(.66,0,.2,1); }
+.group-projects { --stream-card-width: clamp(210px, 18vw, 324px); grid-row: 1; display: flex; align-items: stretch; gap: var(--group-gap); width: max-content; min-height: 0; }
 
-.stream-project { position: relative; z-index: 1; flex: 0 1 var(--stream-card-width); min-width: 0; width: auto; height: 100%; max-height: 100%; align-self: stretch; overflow: hidden; padding: 0; border: 0; background: #1a1b1d; color: #fff; text-align: left; cursor: pointer; animation: stream-card-in .9s both var(--ease); transition: flex-basis .65s cubic-bezier(.66,0,.2,1), transform .7s var(--ease), filter .55s, opacity .45s, box-shadow .5s; }
+.stream-project { position: relative; z-index: 1; flex: 0 1 var(--stream-card-width); min-width: 0; width: auto; height: 100%; max-height: 100%; align-self: stretch; overflow: hidden; padding: 0; border: 0; background: #1a1b1d; color: #fff; text-align: left; cursor: pointer; flex: 0 0 var(--stream-card-width); animation: stream-card-in .9s both var(--ease); transition: flex-basis .65s cubic-bezier(.66,0,.2,1), transform .7s var(--ease), filter .55s, opacity .45s, box-shadow .5s; }
 .stream-project:nth-child(2) { animation-delay: .08s; }
 .stream-project:nth-child(3) { animation-delay: .16s; }
 @keyframes stream-card-in { from { opacity: 0; translate: 0 36px; } to { opacity: 1; translate: 0; } }
@@ -577,22 +577,20 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 /* Expanded card follows the cover's 16:9 ratio exactly, so the whole cover is
    visible instead of being cropped by the resting portrait card. The width is
    measured from the current card height in script.js. */
-.group-projects:has(.stream-project:hover) .stream-project,
-.group-projects:has(.stream-project:focus-visible) .stream-project { flex: 1 1 var(--stream-card-width); }
+/* The hovered card grows from its own left edge; every other card keeps its
+   resting width and is simply pushed further down the row, so nothing is
+   covered or squeezed. The row is `max-content`, so it widens by the same
+   amount and the animation stays continuous in both directions. */
 .group-projects:has(.stream-project:hover) .stream-project:hover,
 .group-projects:has(.stream-project:focus-visible) .stream-project:focus-visible {
   flex: 0 0 var(--expanded-card-width, var(--stream-card-width));
-  width: var(--expanded-card-width, var(--stream-card-width));
-}
-/* Single-project experiences (JD / Kingsoft) have no sibling to absorb the
-   accordion, so the group itself grows to the expanded card width. */
-.group-projects:not(:has(.stream-project:nth-child(2))):has(.stream-project:hover),
-.group-projects:not(:has(.stream-project:nth-child(2))):has(.stream-project:focus-visible) {
-  width: var(--expanded-card-width, var(--group-width));
 }
 .group-projects:has(.stream-project.is-returning) { width: var(--group-width) !important; }
-.group-projects:has(.stream-project.is-returning) .stream-project { flex: 0 1 var(--stream-card-width) !important; width: auto !important; }
-.stream-project:hover, .stream-project:focus-visible { z-index: 4; transform: translateY(-6px); box-shadow: 0 26px 60px rgba(0, 0, 0, .5); }
+.group-projects:has(.stream-project.is-returning) .stream-project { flex: 0 0 var(--stream-card-width) !important; }
+/* No geometric lift on hover: moving the card up makes its bottom edge slide
+   out from under a pointer resting near it, which flips :hover on/off and makes
+   the cover flicker. The shadow alone carries the lift. */
+.stream-project:hover, .stream-project:focus-visible { z-index: 4; box-shadow: 0 26px 60px rgba(0, 0, 0, .5); }
 .stream-project.is-returning { transform: translateY(0) !important; }
 /* keep the cover at its resting look while the clone shrinks, so the clone's
    copied cover matches the real card at handoff (hover is re-applied with the
@@ -605,9 +603,17 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 .stream-project:hover::after, .stream-project:focus-visible::after { opacity: .38; }
 .stream-project-top { position: absolute; z-index: 2; bottom: 13px; left: 13px; right: 13px; display: flex; justify-content: space-between; color: rgba(255,255,255,.68); }
 .stream-project-top i, .stream-project-top em { font-size: 7px; font-style: normal; letter-spacing: .1em; }
-.stream-project-info { position: absolute; z-index: 2; right: 15px; top: 13px; left: 15px; display: grid; gap: 6px; }
-.stream-project-info b { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: clamp(11px, .9vw, 17px); font-weight: 500; line-height: .98; text-transform: uppercase; }
+.stream-project-info { position: absolute; z-index: 2; right: 22px; top: 22px; left: 22px; display: grid; gap: 6px; }
+/* The name mixes CJK and Latin (e.g. 抖音AI封面); keeping it in the site font
+   stack means both scripts render in the same family, matching the pages line
+   below it. Impact's Latin glyphs used to clash with the CJK fallback. */
+.stream-project-info b { font-family: inherit; font-size: clamp(11px, .9vw, 16px); font-weight: 600; line-height: 1.2; letter-spacing: .01em; text-transform: uppercase; }
 .stream-project-info small { color: rgba(255,255,255,.55); font-size: 7px; letter-spacing: .09em; }
+/* An opened card shows the full 16:9 cover, so its top-left label (project name
+   + pages/type line) is hidden instead of sitting on top of the artwork. */
+.stream-project-info { transition: opacity .28s var(--ease); }
+.stream-project:hover .stream-project-info,
+.stream-project:focus-visible .stream-project-info { opacity: 0; }
 .stream-project.is-pending::before { content: "PENDING"; position: absolute; z-index: 3; top: 52px; left: 13px; padding: 4px 6px; border: 1px solid rgba(255,255,255,.42); color: #fff; font-size: 6px; letter-spacing: .12em; }
 
 .stream-progress { position: sticky; z-index: 5; left: 0; bottom: 2px; width: calc(100vw - clamp(44px, 8vw, 144px)); height: 1px; background: rgba(255,255,255,.03); }

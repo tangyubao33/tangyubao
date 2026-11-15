@@ -337,9 +337,9 @@ const experiences = {
   douyin: {
     id: "douyin",
     period: "2022~NOW",
-    company: "字节跳动",
-    mark: "b",
-    logo: "assets/marks/bytedance.webp",
+    company: "抖音",
+    mark: "抖",
+    logo: "assets/marks/douyin.webp",
     accent: "#3c8cff",
     markBg: "#11151b",
     role: "平台产品设计师",
@@ -1435,6 +1435,10 @@ function setActiveScreen(screenName) {
     elements.viewerScreen.classList.remove("is-pseudo-fullscreen");
     syncFullscreenUI();
   }
+  if (screenName !== "home") {
+    resetHoverReveal();
+    resetAccordionShift();
+  }
   state.screen = screenName;
   document.body.dataset.screen = screenName;
   if (changed && routeHydrated) window.requestAnimationFrame(() => focusScreenHeading(screenName));
@@ -1888,12 +1892,16 @@ const stream = {
   target: 0,
   current: 0,
   max: 0,
+  origin: 0,
   viewport: 1,
   cards: [],
   raf: 0,
   lastFrame: 0,
   dirty: true,
-  dragging: false
+  dragging: false,
+  shift: 0,
+  accordion: false,
+  accordionCard: null
 };
 
 const STREAM_LERP = 0.085;
@@ -1925,6 +1933,9 @@ function measureStream() {
   }
   const trackRect = elements.timeline.getBoundingClientRect();
   stream.viewport = shell.clientWidth || window.innerWidth || 1;
+  // Track-local coordinate of the shell's content origin (the shell's left
+  // padding): viewport position = track position + origin - current offset.
+  stream.origin = trackRect.left + stream.current;
   stream.max = Math.max(0, shell.scrollWidth - shell.clientWidth);
   stream.cards = [...elements.timeline.querySelectorAll(".stream-project")].map((element) => {
     const rect = element.getBoundingClientRect();
@@ -1934,21 +1945,85 @@ function measureStream() {
 }
 
 function applyStream() {
-  elements.timeline.style.transform = `translate3d(${-stream.current.toFixed(2)}px, 0, 0)`;
+  // Snap the track to whole device pixels. A fractional translate makes the
+  // compositor resample the whole row every frame, so the 1px seams between
+  // cover cards shimmer while the row animates (worst during the hover
+  // accordion). Whole-device-pixel steps keep every edge on a stable phase.
+  const density = window.devicePixelRatio || 1;
+  const offset = Math.round((stream.current + stream.shift) * density) / density;
+  elements.timeline.style.transform = `translate3d(${-offset}px, 0, 0)`;
   const progress = stream.max > 0 ? stream.current / stream.max : 0;
   elements.streamProgress.style.transform = `scaleX(${Math.max(0.08, progress).toFixed(4)})`;
 }
 
+/* Center-anchored opening: the hovered card grows by `growth` while everything
+   before it has to move left by half of that and everything after it right by
+   half, which is a single translate of the whole track. Reading the live widths
+   every frame keeps this offset exactly in step with the CSS flex-basis
+   transition (and with any interruption), so nothing jumps. `growth` is the sum
+   of all widening, which stays constant when the hover moves from one card to
+   the next because one card opens while the other closes. */
+const SHELL_GUTTER = () => parseFloat(getComputedStyle(elements.streamShell).paddingLeft) || 0;
+
+function updateAccordionShift() {
+  const cards = [...elements.timeline.querySelectorAll(".stream-project")];
+  if (!cards.length) {
+    stream.shift = 0;
+    return;
+  }
+  const widths = cards.map((card) => card.getBoundingClientRect().width);
+  const resting = Math.min(...widths);
+  let growth = 0;
+  widths.forEach((width) => { growth += Math.max(0, width - resting); });
+  // Open around the card's own centre: the row shifts by half the widening, so
+  // the neighbours are pushed apart on both sides. Near a viewport edge the card
+  // is simply allowed to be clipped — there is no extra pan or slide after the
+  // width transition, so nothing else gets dragged across the screen.
+  let shift = growth / 2;
+  const item = stream.accordionCard && stream.cards.find((entry) => entry.element === stream.accordionCard);
+  if (item && shift > 0) {
+    const gutter = SHELL_GUTTER();
+    const left = item.center - item.width / 2 + stream.origin - stream.current;
+    // the first card has no room on its left: open to the right instead
+    shift = Math.min(shift, Math.max(0, left - gutter));
+    // never pull blank space in from the end of the track
+    const blankRoom = elements.streamShell.scrollWidth - stream.current - stream.viewport;
+    if (blankRoom > 0) shift = Math.min(shift, blankRoom);
+    shift = Math.max(0, shift);
+  }
+  stream.shift = shift;
+}
+
+function trackAccordion(card) {
+  stream.accordionCard = card;
+  stream.accordion = true;
+  window.clearTimeout(trackAccordion.timer);
+  trackAccordion.timer = window.setTimeout(() => {
+    stream.accordion = false;
+    stream.accordionCard = null;
+  }, 800);
+  runStream();
+}
+
 function streamFrame(time) {
   if (stream.dirty) measureStream();
+  const shell = elements.streamShell;
   if (!stream.lastFrame) stream.lastFrame = time;
   const delta = Math.min(64, time - stream.lastFrame);
   stream.lastFrame = time;
   const factor = reduceMotionQuery.matches ? 1 : 1 - Math.exp(Math.log(1 - STREAM_LERP) * (delta / (1000 / 60)));
+  // While an open row collapses the content narrows frame by frame; clamp the
+  // target to that live bound instead of snapping to the resting max later,
+  // otherwise the focused card would jump sideways when the pointer leaves.
+  if (stream.target > stream.max) {
+    const liveMax = Math.max(stream.max, shell.scrollWidth - shell.clientWidth);
+    if (stream.target > liveMax) stream.target = liveMax;
+  }
   stream.current += (stream.target - stream.current) * factor;
   if (Math.abs(stream.target - stream.current) < 0.1) stream.current = stream.target;
+  if (stream.accordion) updateAccordionShift();
   applyStream();
-  if (stream.current === stream.target && !stream.dragging) {
+  if (stream.current === stream.target && !stream.dragging && !stream.accordion) {
     stream.raf = 0;
     stream.lastFrame = 0;
     return;
@@ -2020,6 +2095,83 @@ elements.streamShell.addEventListener("click", (event) => {
 
 elements.streamShell.addEventListener("dragstart", (event) => event.preventDefault());
 
+/* The accordion grows the hovered card to 16:9 to the right, so a card that
+   sits near the right edge would expand out of the viewport and stay clipped.
+   Follow the hovered card the same way keyboard focus already does, and allow
+   the pan to exceed the resting bound only while a single-project group (JD /
+   Kingsoft) is actually wide open; leaving the card clamps it back so the
+   stream never exposes blank space where the wider card used to be. */
+/* Keyboard focus still pans the stream so a tabbed-to card is not left
+   off-screen. Mouse hover does not pan at all: the opened card grows from its
+   own centre and may be clipped at a viewport edge, which is the trade-off for
+   never dragging the rest of the row around. */
+const REVEAL_MARGIN = 48;
+
+function revealStreamCard(card) {
+  if (state.screen !== "home") return;
+  if (stream.dragging || suppressStreamClick) return;
+  if (stream.dirty) measureStream();
+  const item = stream.cards.find((entry) => entry.element === card);
+  if (!item) return;
+  const group = card.closest(".group-projects");
+  const expanded = group ? parseFloat(getComputedStyle(group).getPropertyValue("--expanded-card-width")) : NaN;
+  const open = card.matches(":hover, :focus-visible");
+  const width = open && Number.isFinite(expanded) && expanded > 0 ? Math.max(item.width, expanded) : item.width;
+  const left = item.center - item.width / 2 + stream.origin - stream.current - stream.shift;
+  const gutter = Math.min(stream.viewport, parseFloat(getComputedStyle(elements.streamShell).paddingRight) || REVEAL_MARGIN);
+  const leftEdge = gutter;
+  const rightEdge = stream.viewport - gutter;
+  let target = stream.target;
+  if (left < leftEdge) target = stream.current + (left - leftEdge);
+  else if (left + width > rightEdge) target = stream.current + (left + width - rightEdge);
+  // stay inside the resting scroll bound: no over-pan of the stream
+  target = Math.min(Math.max(target, 0), stream.max);
+  if (Math.abs(target - stream.target) < 0.5) return;
+  stream.target = target;
+  runStream();
+}
+
+let hoveredStreamCard = null;
+
+function resetHoverReveal() {
+  hoveredStreamCard = null;
+}
+
+function resetAccordionShift() {
+  window.clearTimeout(trackAccordion.timer);
+  stream.accordion = false;
+  stream.accordionCard = null;
+  stream.shift = 0;
+  applyStream();
+}
+
+elements.streamShell.addEventListener("pointerover", (event) => {
+  if (event.pointerType !== "mouse") return;
+  const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
+  if (!card || card === hoveredStreamCard) return;
+  hoveredStreamCard = card;
+  trackAccordion(card);
+});
+
+elements.streamShell.addEventListener("pointerout", (event) => {
+  if (event.pointerType !== "mouse") return;
+  const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
+  if (!card) return;
+  const next = event.relatedTarget;
+  if (next instanceof Element && card.contains(next)) return;
+  if (hoveredStreamCard !== card) return;
+  hoveredStreamCard = null;
+  // keep following the collapse so the offset returns with the width
+  trackAccordion(card);
+});
+
+elements.timeline.addEventListener("transitionend", (event) => {
+  if (event.propertyName !== "flex-basis") return;
+  const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
+  if (!card || !card.matches(":focus-visible")) return;
+  revealStreamCard(card);
+});
+
 // The stream cards use a one-off entrance animation; when the home screen is
 // hidden and shown again the CSS animation would restart and make the card
 // drift ~36px while the reverse transition is running. Clear it after the
@@ -2033,16 +2185,7 @@ elements.timeline.addEventListener("animationend", (event) => {
 elements.timeline.addEventListener("focusin", (event) => {
   const card = event.target.closest(".stream-project");
   if (!card) return;
-  if (stream.dirty) measureStream();
-  const item = stream.cards.find((entry) => entry.element === card);
-  if (!item) return;
-  const margin = 48;
-  const left = item.center - item.width / 2;
-  const right = item.center + item.width / 2;
-  if (left < stream.current + margin) stream.target = clampStream(left - margin);
-  else if (right > stream.current + stream.viewport - margin) stream.target = clampStream(right - stream.viewport + margin);
-  else return;
-  runStream();
+  trackAccordion(card);
 });
 
 function nudgeStream(direction) {
