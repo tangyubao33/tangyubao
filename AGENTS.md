@@ -144,12 +144,12 @@
 ### 3.8 复合页（PPT 背景图 + 视频框）
 
 - **形态**：一页 = 一张 PPT 导出的 16:9 背景图 + 叠在背景上的 1..n 个视频框；视频与这一页绑定，翻页时整页一起走。
-- **数据**：`{ type: "composite", src, variants, background, thumb, alt, overlays: [{ kind: "video", id, label, src, poster, box: { x, y, w, h }, fit, radius, radiusCorners?, objectPosition?, muted, loop, autoplay, soundHint }] }`；**不再使用 `controls` 字段**（原生控件已换成站点自己的控制条）；`src` 是背景 + poster 预合成的预览图（用于统一翻页/克隆层），`background` 保留原始背景；`radiusCorners` 可分别设置四角，`objectPosition` 控制媒体裁切焦点。旧图片页零迁移。
+- **数据**：`{ type: "composite", src, variants, background, thumb, alt, overlays: [{ kind: "video", id, label, src, poster, box: { x, y, w, h }, fit, radius, radiusCorners?, objectPosition?, muted, loop, autoplay, soundHint?, silent? }] }`；`silent: true` 表示这条录屏没有音轨（不显示静音按钮、不弹提示）；**不再使用 `controls` 字段**（原生控件已换成站点自己的控制条）；`src` 是背景 + poster 预合成的预览图（用于统一翻页/克隆层），`background` 保留原始背景；`radiusCorners` 可分别设置四角，`objectPosition` 控制媒体裁切焦点。旧图片页零迁移。
 - **定位**：`box` 用百分比（相对整页），`radius`/`shadow` 用「页宽的百分比」——`sizeArtworkFrame()` 把页宽写入 `--frame-unit`，CSS 用 `calc(var(--frame-unit) * var(--media-radius))`。实测 6 个视口 x/y/w/h 与清单完全一致、圆角随页宽 2.7→4.1px 等比缩放。
 - **播放（2026-11-15 改为自动播放 + 站点自控）**：视频页进入/翻到即**自动播放**，且**默认静音**（浏览器只允许静音自动播放，所有视频数据 `muted:true`）；多视频页按 `box.x` **从左往右依次播放**——第一个 `ended` 后自动接第二个（`mediaState.queue`），全部播完后回到「大 ▶ 重播」状态。未播放时只有 poster + 居中 ▶（`<video>` 无 `src`，零流量）；点击 ▶ 或画面才注入 `src` 播放。**控制条是站点自己的**（`.media-controls`：播放/暂停、进度条、静音开关），不再用原生控件——原生条在 200–300px 宽的手机框里挤成一团、也没法从 CSS 精确对齐提示气泡；`<video>` 只负责播放。静音开关会记住这次选择（`mediaState.soundOn`），后续视频尝试带声音播，被浏览器拒绝则退回静音。**同一页只播一个**，点另一个会把前一个暂停并复位。**loading 只有一个**：开始播放时立刻隐藏大 ▶，只留中央转圈（避免 ▶ 圆底和转圈叠在一起）。离开页面/退到别的屏会暂停并销毁。
 - **翻页与进出场**：视频页与其他页统一使用 640ms `translateY` 上下翻页。转场期间隐藏 overlay canvas、使用预合成 `src` 预览图（背景 + poster）参与滑动/克隆层；转场结束后再显示 canvas。这样既保持全局滚动一致，也不会移动 `<video>`。
 - **播放图标**：所有视频的居中播放按钮为半透明黑色玻璃圆底（`rgba(8,10,14,.56)` + `backdrop-filter: blur(12px)`）+ 标准白色播放三角形（Heroicons solid play），三角形轻微右移（`margin-left:4%`），视觉上居中平衡。
-- **声音提示**：带 `soundHint` 的视频在静音播放时浮出「注意检查电脑音量后，可取消静音播放」，7 秒后淡出；取消静音、暂停或播放结束时立即隐藏；**每页只提示一次**（三个视频依次播放不会连弹三次）。气泡挂在 `.slide-canvas` 上（媒体框 `overflow:hidden`，窄框会裁掉气泡），由 `showSoundHint()` 按「媒体框矩形 + 控制条几何」定位：气泡右边缘在框内 4px、底边在控制条上方 8px，尾巴中心正好落在静音按钮中心（`--media-hint-tail`），所以任何框宽都对齐；`pointer-events:none`。
+- **声音提示**：**只有「个人AI转型实践」第 6 页那条带音轨的录屏出提示**（数据里 `soundHint` 只写在它的 overlay 上）；抖音的 5 条屏幕录制只有视频轨，静音也没声，所以标 `silent: true`、控制条不显示静音按钮、也不弹气泡。提示在静音播放时浮出「注意检查电脑音量后，可取消静音播放」，7 秒后淡出；取消静音、暂停、播放结束时立即隐藏；每页只提示一次。气泡挂在 `.slide-canvas` 上（媒体框 `overflow:hidden`，窄框会裁掉气泡），`showSoundHint()` 直接量**静音按钮的矩形**来定位：气泡右边缘对齐按钮右边缘、底边在按钮上方 8px、尾巴中心 = 按钮中心（`--media-hint-tail`），所以任何框宽/DPR 都精确对齐；`pointer-events:none`。
 - **清理**：离开页面 / 退出预览时 `stopSlideMedia()` 暂停并把控制条、大 ▶、提示气泡复位，再销毁 `<video>`（`pause()` + 移除 `src` + `load()`）；实测翻走后 `<video>` 元素 0 个、`[data-slide-canvas]` 隐藏。视频框内的点击不再被 640ms 翻页滑动手势误判（`artworkFrame` 的 `pointerdown` 在捕获阶段忽略 `.media-box` 内的手势）。
 - **缩略图**：背景图 + 蓝色 `▶` 角标（多个视频显示数量），`aria-label` 追加「（含视频）」。
 - **视频铺满**：视频/ poster 的 `object-fit` 必须是 `cover`，让画面填满手机框；`.artwork-frame img` 的全局 `contain` 会覆盖普通 `.media-poster` 规则，必须用 `.artwork-frame .media-poster/.media-video` 这类更高特异性选择器修正，否则框内会出现黑边缝隙。
@@ -289,6 +289,7 @@
 - PNG 图层与视频共用百分比坐标体系，支持层级、透明度、适配方式和等比圆角；分层 PPT 应先用现有编辑器或坐标转换工具校验后再入库。
 - 「个人AI转型实践」第 6 页继续使用复合页实现；视频已替换为带 AAC 音轨的 `ai-practice-demo.mp4`，默认静音播放，点击后提示可取消静音，取消后正常出声。
 - **2026-11-15**：抖音AI封面第 6 页视频框按 PPT 手机边框内沿重测（`x 8.91 / y 30.68 / w 18.59`、内圆角 1.06）并加 `objectPosition:"top"`；重出 `06-preview.jpg`、四档 WebP 变体与 320×180 缩略图。原因是录屏（592×1280）比框更窄，默认居中 `cover` 会把顶部状态栏裁到边框外，视觉上「视频没对齐顶部边框」。
+- **2026-11-15**：声音提示只保留在「个人AI转型实践」第 6 页（唯一带音轨的录屏）；抖音 5 条无声录屏标 `silent: true`，控制条不再显示静音按钮、也不再弹气泡。气泡改为直接量静音按钮矩形定位，尾巴中心与按钮中心严格重合（1440 实测 1019.6 = 1019.6）。另外 `index.html` 的 `script.js`/`styles.css` 加了 `?v=` 版本号，避免浏览器缓存继续跑旧版本。
 - **2026-11-15**：视频页改为**自动播放 + 站点自控控制条**——进入页面即自动静音播放，多视频页从左往右依次接力；大 ▶ 只在未播放/重播时出现，开始播放立刻隐藏（修「点一下出现多个 loading」）；原生控件换成站点自己的播放/暂停 + 进度 + 静音条，静音提示气泡改成挂在画布层、按控制条几何精确对准静音按钮（修「气泡和音量图标错位」，每页只提示一次）。
 - 抖音其他项目第 3 页、抖音AI封面第 6/7 页为视频复合页；视频/ poster 与框坐标以 §3.8 为准；播放器不强制静音，但源视频目前无音轨。
 - 抖音其他项目第 3 页视频顶部对齐媒体框，仅上方圆角、底部直角并被裁切；其他视频页仍四角圆角。

@@ -237,7 +237,7 @@ const bytedanceOtherSlides = bytedanceOtherOrder.map((fileNumber, index) => {
           radiusCorners: { tl: 1.6, tr: 1.6, br: 0, bl: 0 },
           muted: true,
           loop: false,
-          soundHint: "注意检查电脑音量后，可取消静音播放",
+          silent: true,
           autoplay: true
         }
       ]
@@ -279,7 +279,7 @@ bytedanceAiCoverSlides[5] = {
       radiusCorners: { tl: 1.06, tr: 1.06, br: 0, bl: 0 },
       muted: true,
       loop: false,
-      soundHint: "注意检查电脑音量后，可取消静音播放",
+      silent: true,
       autoplay: true
     }
   ]
@@ -311,7 +311,7 @@ bytedanceAiCoverSlides[6] = {
     radius: item.radius,
     muted: true,
     loop: false,
-    soundHint: "注意检查电脑音量后，可取消静音播放",
+    silent: true,
     autoplay: true
   }))
 };
@@ -1121,20 +1121,19 @@ function hideSoundHint(box) {
 function showSoundHint(box) {
   const hint = box?._soundHint;
   const canvas = elements.slideCanvas;
-  if (!hint || !canvas) return;
+  const mute = box?.querySelector(".media-mute");
+  if (!hint || !canvas || !mute) return;
   // once per page is enough: a page with three demos should not flash the same
   // hint three times while they hand over to each other
   if (mediaState.hintShown) return;
   mediaState.hintShown = true;
+  // Anchor from the real mute button rectangle (it is our own DOM), so the
+  // bubble tail sits exactly on the icon at any frame size or bar padding.
   const canvasRect = canvas.getBoundingClientRect();
-  const boxRect = box.getBoundingClientRect();
-  const barPad = 8;
-  const button = 24;
-  const barHeight = barPad * 2 + button;
-  const muteCenter = barPad + button / 2;
-  hint.style.right = `${(canvasRect.right - boxRect.right) + barPad - 4}px`;
-  hint.style.bottom = `${(canvasRect.bottom - boxRect.bottom) + barHeight + 8}px`;
-  hint.style.setProperty("--media-hint-tail", `${muteCenter - barPad + 4 - 4.5}px`);
+  const muteRect = mute.getBoundingClientRect();
+  hint.style.right = `${canvasRect.right - muteRect.right}px`;
+  hint.style.bottom = `${canvasRect.bottom - muteRect.top + 8}px`;
+  hint.style.setProperty("--media-hint-tail", `${muteRect.width / 2 - 4.5}px`);
   window.clearTimeout(hint._hideTimer);
   window.requestAnimationFrame(() => hint.classList.add("is-visible"));
   hint._hideTimer = window.setTimeout(() => hint.classList.remove("is-visible"), 7000);
@@ -1206,22 +1205,28 @@ function buildMediaControls(box, overlay) {
   progress.setAttribute("aria-valuenow", "0");
   progress.innerHTML = '<span class="media-progress-fill"></span>';
 
-  const mute = document.createElement("button");
-  mute.type = "button";
-  mute.className = "media-mute";
-  mute.innerHTML = MEDIA_ICON.muted;
-  mute.setAttribute("aria-label", "取消静音");
+  bar.append(toggle, progress);
+  // silent screen recordings get no mute button (and no sound hint): there is
+  // nothing to unmute, so the control bar only carries playback
+  let mute = null;
+  if (!overlay.silent) {
+    mute = document.createElement("button");
+    mute.type = "button";
+    mute.className = "media-mute";
+    mute.innerHTML = MEDIA_ICON.muted;
+    mute.setAttribute("aria-label", "取消静音");
+    bar.append(mute);
+    mute.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleMute(box);
+    });
+  }
 
-  bar.append(toggle, progress, mute);
   box.append(bar);
 
   toggle.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleMedia(box);
-  });
-  mute.addEventListener("click", (event) => {
-    event.stopPropagation();
-    toggleMute(box);
   });
   progress.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -1253,9 +1258,21 @@ function buildMediaControls(box, overlay) {
   return bar;
 }
 
+/* One, short-lived loading indicator. A fast start never flashes a spinner, and
+   buffering in the middle of playback no longer blinks one either — repeated
+   spinners read as "several loadings". */
+function setBoxLoading(box, on) {
+  window.clearTimeout(box._loadingTimer);
+  if (!on) {
+    box.classList.remove("is-loading");
+    return;
+  }
+  box._loadingTimer = window.setTimeout(() => box.classList.add("is-loading"), 220);
+}
+
 function bindMediaVideo(box, overlay, video) {
   video.addEventListener("playing", () => {
-    box.classList.remove("is-loading");
+    setBoxLoading(box, false);
     box.dataset.playing = "true";
     box.classList.add("is-playing");
     box.querySelector(".media-play")?.classList.add("is-hidden");
@@ -1271,7 +1288,10 @@ function bindMediaVideo(box, overlay, video) {
     revealControls(box);
     hideSoundHint(box);
   });
-  video.addEventListener("waiting", () => box.classList.add("is-loading"));
+  // only the very first load gets a spinner; mid-playback buffering stays quiet
+  video.addEventListener("waiting", () => {
+    if (box.dataset.playing !== "true") setBoxLoading(box, true);
+  });
   video.addEventListener("timeupdate", () => updateMediaUi(box, video));
   video.addEventListener("loadedmetadata", () => updateMediaUi(box, video));
   video.addEventListener("durationchange", () => updateMediaUi(box, video));
@@ -1285,7 +1305,8 @@ function bindMediaVideo(box, overlay, video) {
   });
   video.addEventListener("ended", () => {
     box.dataset.playing = "false";
-    box.classList.remove("is-playing", "is-loading");
+    box.classList.remove("is-playing");
+    setBoxLoading(box, false);
     hideControls(box);
     hideSoundHint(box);
     box.querySelector(".media-play")?.classList.remove("is-hidden");
@@ -1309,7 +1330,7 @@ function startMedia(box, overlay, options = {}) {
     hideSoundHint(other);
     other.querySelector(".media-play")?.classList.remove("is-hidden");
   });
-  box.classList.add("is-loading");
+  setBoxLoading(box, true);
   // hide the big play affordance right away: the spinner is the only loading
   // indicator, otherwise the ▶ circle and the spinner stack on the same spot
   box.querySelector(".media-play")?.classList.add("is-hidden");
@@ -1341,7 +1362,7 @@ function startMedia(box, overlay, options = {}) {
         video.muted = true;
         video.play().catch(() => { /* ignore */ });
       }
-      box.classList.remove("is-loading");
+      setBoxLoading(box, false);
       box.querySelector(".media-play")?.classList.remove("is-hidden");
     });
   }
