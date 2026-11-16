@@ -207,7 +207,7 @@
 
 ### 3.12 结尾 THANK 页（thank）
 
-- **形态**：每个项目的最后一页固定追加一页 `type: "thank"` 的收尾页（**DOM 渲染，不是图片**）：手写体黄色「Thank you」+「感谢观看」+ 一句引导语 + `E-MAIL 834316142@qq.com` / `TEL / 微信 189113300923`（真实 `mailto:` / `tel:` 链接，全屏下也可点）+ 签名「唐尉保 · TANG YUBAO · UI/UX DESIGNER」。内容统一写在 `index.html` 的 `.thank-slide` 里，数据侧只加一个 `{ type: "thank" }` 标记。
+- **形态**：每个项目的最后一页固定追加一页 `type: "thank"` 的收尾页（**DOM 渲染，不是图片**），版式对齐旧的「THANKS」收尾页（2026-11-16 改）：深色底上**居中**排一列大字 `THANKS`（Arial 600、大写），下方居中「唐尉保 · UI/UX DESIGNER」，再下方一行 `TEL：189113300923 ｜ E-MAIL：834316142@qq.com`（两条都是真实 `mailto:` / `tel:` 链接，全屏下也可点，中间为 1px 渐隐竖线）。参考图里是「UI/UE」，站点统一用「UI/UX」。内容统一写在 `index.html` 的 `.thank-slide` 里，数据侧只加一个 `{ type: "thank" }` 标记。
 - **注入方式**：`script.js` 在「封面即第 1 页」的归一化之后，给每个有 slides 的项目 `push` 一份 `THANK_SLIDE`；因此它永远是最后一个页面。项目卡片上的「N PAGES」用 `contentPageCount()` 排除 thank（封面页数不变，如抖音创作服务平台仍是 24），查看器页码则包含 thank（25 / 25）。
 - **查看器接入**：`placeArtwork()` / `moveArtwork()` 对 thank 单独分支——进入时把 `<img data-main-artwork>` 清空、`.thank-slide` 取消 `hidden`，旧页放在 ghost 上按 640ms 同款滑动退出；离开 thank 时没有位图可滑出，改为 0.22s 溶解；`prefers-reduced-motion` 直接切换；加载遮罩、占位缩略图、响应式选档都跳过 thank；离开查看器时隐藏 `.thank-slide`。
 - **缩略图**：thank 缩略图为暗底 + 黄色手写 `THANK`（`.thumbnail-thank`），`aria-label` 为「查看感谢页」。
@@ -329,6 +329,8 @@
 - **2026-11-16**：Safari / 微信封面重叠修复随提交 `d7cddc9` 部署到 GitHub Pages（线上资源版本 `?v=20261116e`，同批带上「大图加载模糊遮罩」）。验收方式：用 Playwright WebKit（Safari 内核；真机 Safari 的 `safaridriver` 远程自动化默认未开启）＋ Chrome 对**线上地址**复测桌面 1440、iPhone 14、微信 UA、320 小屏——分组宽度 `1071 / 1188 / 979`（三组均正常展开）、无封面重叠、无横向溢出、无 JS 报错，hover 展开（259→741）正常。**GitHub Pages 缓存固定 10 分钟**，改版验收前必须强制刷新（Mac Safari `⌘⇧R`、iPhone 清 Safari 网站数据、微信关掉重进），否则会看到旧 CSS。
 
 - **2026-11-16**：每个项目在最后追加一页 DOM 渲染的 THANK 页（Thank you / 感谢观看 / E-MAIL 834316142@qq.com / TEL 189113300923 / 签名），缩略图改用 `THANK` 暗底瓦片，查看器页码 +1、项目卡片页数仍按内容页计；进入用 640ms 滑动、离开用 0.22s 溶解，`prefers-reduced-motion` 直接切换；字号按 `--frame-unit` 自适应，8 个基准视口与矮横屏均完整落在作品框内。规则见 §3.12。
+
+- **2026-11-16**：THANK 收尾页版式按旧「THANKS」页面重排——深色背景保留，内容改为居中一列：大字 `THANKS` → 「唐尉保 · UI/UX DESIGNER」→ `TEL：189113300923 ｜ E-MAIL：834316142@qq.com`（链接可点）；去掉原来的手写 Thank you / 感谢观看 / 引导语 / 签名，仍在 8 个基准视口与矮横屏内完整显示。细节见 §3.12。
 
 ### 6.7 文档治理
 
