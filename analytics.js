@@ -467,8 +467,25 @@
 
   /* ------------------------------------------------------------------- vitals */
 
-  var vitals = { lcp: null, cls: 0, inp: null, fcp: null, ttfb: null, load: null };
+  var vitals = { lcp: null, cls: 0, inp: null, fcp: null, ttfb: null, load: null, dom: null };
   var vitalsSent = { early: false, final: false };
+
+  // Navigation timing and FCP are only final after the load event; read them
+  // again when the vitals event is actually sent (the initial snapshot runs
+  // before load and would otherwise report null load/FCP).
+  function refreshVitals() {
+    try {
+      var nav = window.performance.getEntriesByType("navigation")[0];
+      if (nav) {
+        vitals.ttfb = Math.round(nav.responseStart);
+        vitals.dom = nav.domContentLoadedEventEnd ? Math.round(nav.domContentLoadedEventEnd) : vitals.dom;
+        vitals.load = nav.loadEventEnd ? Math.round(nav.loadEventEnd) : vitals.load;
+      }
+      (window.performance.getEntriesByType("paint") || []).forEach(function (entry) {
+        if (entry.name === "first-contentful-paint") vitals.fcp = Math.round(entry.startTime);
+      });
+    } catch (error) { /* ignore */ }
+  }
 
   function observeVitals() {
     if (!window.PerformanceObserver) return;
@@ -506,6 +523,7 @@
 
   function sendVitals(stage) {
     if (!active || vitalsSent[stage]) return;
+    refreshVitals();
     var cls = Math.round(vitals.cls * 1000) / 1000;
     if (vitals.lcp == null && vitals.fcp == null && vitals.ttfb == null && !cls && vitals.inp == null) return;
     vitalsSent[stage] = true;
@@ -517,6 +535,7 @@
       inp_ms: vitals.inp,
       ttfb_ms: vitals.ttfb,
       load_ms: vitals.load,
+      dom_ms: vitals.dom,
       vw: window.innerWidth,
       vh: window.innerHeight,
       mode: viewportClass()
