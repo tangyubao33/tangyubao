@@ -112,6 +112,7 @@ const PORTRAIT_SRCSET = (cover) => {
 function updateCoverSizes(root) {
   const scope = root || document;
   scope.querySelectorAll("img[data-cover]").forEach((img) => {
+    if (img.dataset.coverMode === "expanded") return; // hover state owns the size
     const card = img.closest(".stream-project, .project-card, .other-project");
     if (!card) return;
     const rect = card.getBoundingClientRect();
@@ -261,6 +262,53 @@ function refreshArtworkResolution() {
   };
   preload.src = wanted;
 }
+/* Hover expands a home card to a full 16:9 cover. The resting card uses the
+   portrait crop (sharp at its tall crop), so the expanded state swaps back to
+   the 16:9 variants at the expanded width; otherwise the portrait crop would be
+   blown up ~2× and vertically cropped. Preload it 150ms before the expansion
+   starts so the bigger bitmap is usually ready. */
+function cardCoverMetrics(card) {
+  const img = card.querySelector("img[data-cover]");
+  if (!img) return null;
+  const rect = card.getBoundingClientRect();
+  return { img, cover: img.dataset.cover, width: rect.width, height: rect.height };
+}
+
+function setCardCoverMode(card, mode) {
+  const metrics = cardCoverMetrics(card);
+  if (!metrics || !metrics.cover) return;
+  const { img, cover, width, height } = metrics;
+  if (mode === "expanded") {
+    window.clearTimeout(card._coverRestTimer);
+    if (img.dataset.coverMode === "expanded") return;
+    img.dataset.coverMode = "expanded";
+    img.srcset = coverSrcset(cover);
+    img.sizes = `${Math.ceil(Math.max(width, height * COVER_ASPECT))}px`;
+    img.src = `${coverBase(cover)}.w960.webp`;
+    return;
+  }
+  if (img.dataset.coverMode !== "expanded") return;
+  // Restore only after the 650ms collapse finished: measuring the box while it
+  // shrinks would still see the expanded 16:9 aspect and keep the landscape
+  // variant, which then looks cropped upscaled at the resting size.
+  img.dataset.coverMode = "";
+  window.clearTimeout(card._coverRestTimer);
+  card._coverRestTimer = window.setTimeout(() => {
+    if (!card.classList.contains("is-expanded")) updateCoverSizes(card);
+  }, 700);
+}
+
+function preloadExpandedCover(card) {
+  const metrics = cardCoverMetrics(card);
+  if (!metrics || !metrics.cover) return;
+  const sizesCss = Math.max(metrics.width, metrics.height * COVER_ASPECT);
+  const target = sizesCss * Math.min(window.devicePixelRatio || 1, 3);
+  const width = [640, 960, 1280, 1920, 2560].find((value) => value >= target) || 2560;
+  const image = new Image();
+  image.decoding = "async";
+  image.src = `${coverBase(metrics.cover)}.w${width}.webp`;
+}
+
 const slideThumb = (slide) => slide?.thumb || slideSource(slide);
 const slideVideoCount = (slide) =>
   isComposite(slide) ? (slide.overlays || []).filter((overlay) => overlay.kind === "video").length : 0;
@@ -3321,6 +3369,7 @@ const STREAM_HOVER_DELAY = 150;
 function setStreamExpanded(card, expanded) {
   if (!card) return;
   card.classList.toggle("is-expanded", expanded);
+  setCardCoverMode(card, expanded ? "expanded" : "rest");
   const anyExpanded = elements.timeline.querySelector(".stream-project.is-expanded");
   elements.streamShell.classList.toggle("is-hovering", Boolean(anyExpanded));
 }
@@ -3330,6 +3379,7 @@ function armStreamHover(card) {
   streamHoverTimer = window.setTimeout(() => {
     if (hoveredStreamCard !== card || stream.dragging) return;
     homeEngagement.hovers += 1;
+    preloadExpandedCover(card);
     setStreamExpanded(card, true);
     // start following the accordion shift only when it really expands
     trackAccordion(card);
@@ -3341,6 +3391,7 @@ function resetHoverReveal() {
   hoveredStreamCard = null;
   elements.timeline.querySelectorAll(".stream-project.is-expanded").forEach((card) => {
     card.classList.remove("is-expanded");
+    setCardCoverMode(card, "rest");
   });
   elements.streamShell.classList.remove("is-hovering");
 }
@@ -3405,6 +3456,16 @@ elements.timeline.addEventListener("focusin", (event) => {
   const card = event.target.closest(".stream-project");
   if (!card) return;
   trackAccordion(card);
+  // keyboard expansion is pure CSS (:focus-visible); mirror it on the bitmap
+  if (card.matches(":focus-visible")) {
+    preloadExpandedCover(card);
+    setCardCoverMode(card, "expanded");
+  }
+});
+
+elements.timeline.addEventListener("focusout", (event) => {
+  const card = event.target.closest(".stream-project");
+  if (card) setCardCoverMode(card, "rest");
 });
 
 function nudgeStream(direction) {
