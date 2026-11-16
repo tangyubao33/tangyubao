@@ -815,7 +815,8 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   .group-company { font-size: 12.5px; }
   .group-copy { gap: 2px; }
   .group-copy strong, .group-copy small { font-size: 10px; }
-  .group-projects { --stream-card-width: min(74.4vw, 324px); }
+  /* 手机端封面继续随浏览器宽度收窄，不再在断点处变宽；高度由布局保持稳定 */
+  .group-projects { --stream-card-width: clamp(190px, 32vw, 210px); }
   .stream-project { height: min(54vh, 487px); }
   .stream-progress { width: calc(100vw - 40px); }
   .experience-card { padding-top: 32px; }
@@ -836,8 +837,8 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   .panel-heading { align-items: start; }
   .panel-heading span { max-width: 120px; text-align: right; }
   .project-grid { height: auto; display: grid; grid-template-columns: 1fr; align-content: start; justify-items: center; }
-  /* 手机端项目封面保持竖版：高度撑满可视区，宽度按 0.62 比例缩小 */
-  .project-card { width: min(calc(72vh * .62), calc(100vw - 40px)); min-height: 0; height: auto; aspect-ratio: .62; }
+  /* 手机端项目封面：高度固定为 72vh，拉窄浏览器时只收窄宽度 */
+  .project-card { width: min(calc(72vh * .62), calc(100vw - 40px)); min-height: 0; height: 72vh; }
 
   .viewer-screen { grid-template-columns: minmax(0, 1fr) 72px; grid-template-rows: minmax(0, 1fr); }
   .viewer-back [data-viewer-back-label] { display: none; }
