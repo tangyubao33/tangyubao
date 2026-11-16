@@ -46,7 +46,15 @@ check("device shares sum near 100", Math.abs(current.devices.reduce((sum, device
 check("viewer sources present", current.viewer.sources.length > 0);
 check("exit reasons present", current.viewer.exit_reasons.length > 0);
 check("no NaN in overview", Object.values(current.overview).every((value) => typeof value !== "number" || Number.isFinite(value)));
-check("dashboard contract keys", ["overview", "daily", "projects", "about", "home", "viewer", "funnel", "devices", "referrers", "vitals", "load", "errors", "actions"].every((key) => key in current));
+check("dashboard contract keys", ["overview", "daily", "projects", "about", "home", "viewer", "funnel", "devices", "referrers", "vitals", "load", "boot", "artwork", "resource_errors", "errors", "actions"].every((key) => key in current));
+check("boot attempts >= successes", current.boot.attempts >= current.boot.successes, `${current.boot.successes}/${current.boot.attempts}`);
+check("boot success rate in range", current.boot.success_rate >= 0 && current.boot.success_rate <= 100, String(current.boot.success_rate));
+check("boot failure reasons reported", current.boot.fail_reasons.length > 0);
+check("boot p75 positive", current.boot.p75_ms > 0, String(current.boot.p75_ms));
+check("artwork load samples", current.artwork.count > 0, String(current.artwork.count));
+check("artwork p75 positive", current.artwork.p75_ms > 0, String(current.artwork.p75_ms));
+check("artwork phase split", current.artwork.by_phase.length === 2 && current.artwork.by_phase.every((phase) => phase.count >= 0));
+check("daily boot fields", current.daily.every((row) => typeof row.boot_attempts === "number" && typeof row.boot_success === "number"));
 check("meta event count positive", current.meta.event_count > 0);
 
 // Sample project consistency: 抖音创作服务平台 has 24 content pages + THANK.

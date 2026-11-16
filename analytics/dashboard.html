@@ -303,6 +303,27 @@
     </div>
     <section class="kpis" id="kpis"></section>
 
+    <div class="section-head"><h2>打开成功率 &amp; 加载性能</h2><span class="hint">独立启动探针：analytics.js 失败也能统计；打开耗时 = 导航开始 → 应用就绪</span></div>
+    <section class="grid two">
+      <div class="card">
+        <h3>网页打开成功率</h3>
+        <p class="card-sub">boot_start → boot_ready；超时、关键脚本失败计入失败</p>
+        <div id="bootStats" class="stat-list"></div>
+        <div class="divider"></div>
+        <p class="muted" style="margin:0 0 8px;font-size:11.5px">失败 / 未完成原因</p>
+        <div id="bootFailures" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>加载性能</h3>
+        <p class="card-sub">Web Vitals p75 · 首屏体积 · 作品页图片加载耗时</p>
+        <div id="perfVitals" class="vitals"></div>
+        <div class="divider"></div>
+        <div id="perfStats" class="stat-list"></div>
+        <div class="divider"></div>
+        <div id="artworkStats" class="stat-list"></div>
+      </div>
+    </section>
+
     <div class="section-head"><h2>转化漏斗</h2><span class="hint">按会话去重，同一访客多次打开只计一次</span></div>
     <section class="grid two">
       <div class="card">
@@ -427,7 +448,9 @@
   // browsers never send in the Referer. The fragment still lands in the
   // address bar / history, so it is a personal bookmark rather than a share link.
   var hashParams = new URLSearchParams((location.hash || "").replace(/^#/, ""));
-  var API_PARAM = params.get("api") || hashParams.get("api");
+  // `?api=` (empty) deliberately means "same origin" for the local collector;
+  // keep it distinct from "no api param" which falls back to DEFAULT_API.
+  var API_PARAM = params.has("api") ? params.get("api") : (hashParams.has("api") ? hashParams.get("api") : null);
   var IS_HTTP = location.protocol === "http:" || location.protocol === "https:";
   // Opening dashboard.html directly (Pages, local file, or any host) now talks
   // to the deployed collector; ?api=… still overrides it for other instances.
@@ -441,7 +464,7 @@
     demo: false,
     error: "",
     projectKey: "",
-    trend: { sessions: true, home_views: false, impressions: false, card_clicks: true, viewer_opens: true, about_opens: false, resume_downloads: false }
+    trend: { sessions: true, boot_attempts: false, boot_success: false, home_views: false, impressions: false, card_clicks: true, viewer_opens: true, about_opens: false, resume_downloads: false }
   };
 
   var els = {
@@ -450,6 +473,11 @@
     loading: document.getElementById("loading"),
     content: document.getElementById("content"),
     kpis: document.getElementById("kpis"),
+    bootStats: document.getElementById("bootStats"),
+    bootFailures: document.getElementById("bootFailures"),
+    perfVitals: document.getElementById("perfVitals"),
+    perfStats: document.getElementById("perfStats"),
+    artworkStats: document.getElementById("artworkStats"),
     funnelBrowse: document.getElementById("funnelBrowse"),
     funnelConvert: document.getElementById("funnelConvert"),
     convertExtras: document.getElementById("convertExtras"),
@@ -481,6 +509,8 @@
 
   var TREND_META = {
     sessions: { label: "访问会话", color: "#6ea8fe" },
+    boot_attempts: { label: "打开尝试", color: "#8b94a3" },
+    boot_success: { label: "成功打开", color: "#3ddc97" },
     home_views: { label: "首页浏览", color: "#8b94a3" },
     impressions: { label: "封面曝光", color: "#b58cff" },
     card_clicks: { label: "作品点击", color: "#3ddc97" },
@@ -628,7 +658,8 @@
     els.sourceBadge.className = "badge";
     els.sourceBadge.textContent = "连接中…";
 
-    var remote = Boolean(REMOTE_BASE) && !FORCE_DEMO;
+    // REMOTE_BASE may be "" on purpose (same-origin local collector).
+    var remote = !FORCE_DEMO;
     if (remote) {
       try {
         var data = await fetchRemote(state.days);
@@ -688,6 +719,7 @@
       kpi("作品看完率", fmtPct(o.viewer_completion_rate), "看到最后一个内容页", delta(o.viewer_completion_rate, p.viewer_completion_rate, "rate", "up"))
     ];
     els.kpis.innerHTML = kpiRows.join("");
+    renderBootAndPerf(current);
 
     funnel(els.funnelBrowse, current.funnel.browse, "");
     funnel(els.funnelConvert, current.funnel.convert, "convert");
@@ -728,7 +760,7 @@
       var date = new Date(today.getTime() - index * 86400000);
       var key = date.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
       labels.push(key);
-      rows.push(byDate[key] || { date: key, sessions: 0, home_views: 0, impressions: 0, card_clicks: 0, viewer_opens: 0, about_opens: 0, resume_downloads: 0 });
+      rows.push(byDate[key] || { date: key, sessions: 0, home_views: 0, impressions: 0, card_clicks: 0, viewer_opens: 0, about_opens: 0, resume_downloads: 0, boot_attempts: 0, boot_success: 0 });
     }
     var series = Object.keys(TREND_META).filter(function (key) { return state.trend[key]; }).map(function (key) {
       return {
@@ -822,6 +854,62 @@
       tooltip.style.display = "none";
       hoverLine.setAttribute("opacity", "0");
     });
+  }
+
+  function renderBootAndPerf(current) {
+    var boot = current.boot || { attempts: 0, successes: 0, failures: 0, incomplete: 0, fail_reasons: [], by_mode: [] };
+    var attempts = boot.attempts || 0;
+    var bootRate = attempts ? fmtPct(boot.success_rate) : "—";
+    var reasons = (boot.fail_reasons || []).map(function (item) {
+      var labels = { timeout: "超时未就绪", script_error: "关键脚本失败", js_error: "JS 错误", incomplete: "未完成", unknown: "未知" };
+      return { name: labels[item.name] || item.name, value: item.count, display: fmtNum(item.count) + " · " + fmtPct(item.pct) };
+    });
+    els.bootStats.innerHTML = [
+      stat("打开成功率", bootRate, attempts ? fmtNum(boot.successes) + " / " + fmtNum(attempts) + " 次" : "等待新数据"),
+      stat("打开尝试", fmtNum(attempts), "boot_start"),
+      stat("失败", fmtNum(boot.failures), boot.incomplete ? "未完成 " + fmtNum(boot.incomplete) : ""),
+      stat("打开耗时 p75", fmtMs(boot.p75_ms), "导航开始 → 应用就绪"),
+      stat("慢打开率", fmtPct(boot.slow_open_rate), "> 3s"),
+      stat("图片加载 p75", fmtMs(current.artwork && current.artwork.p75_ms), "作品页")
+    ].join("");
+    if (reasons.length) bars(els.bootFailures, reasons, { color: "#ff6b6b" });
+    else els.bootFailures.innerHTML = '<p class="muted" style="margin:0">没有打开失败记录</p>';
+
+    var vitals = current.vitals || {};
+    var load = current.load || {};
+    function perfVital(label, value, unit, good, bad, format) {
+      var tone = !value ? "" : value <= good ? "good" : value <= bad ? "mid" : "bad";
+      return '<div class="vital ' + tone + '"><span>' + label + "<em>" +
+        (tone === "good" ? "良好" : tone === "mid" ? "需关注" : tone === "bad" ? "偏慢" : "") +
+        "</em></span><b>" + (value ? format(value) : "—") + unit + "</b></div>";
+    }
+    els.perfVitals.innerHTML = [
+      perfVital("LCP p75", vitals.lcp_p75, "ms", 2500, 4000, function (v) { return fmtNum(v); }),
+      perfVital("FCP p75", vitals.fcp_p75, "ms", 1800, 3000, function (v) { return fmtNum(v); }),
+      perfVital("TTFB p75", vitals.ttfb_p75, "ms", 800, 1800, function (v) { return fmtNum(v); }),
+      perfVital("CLS p75", vitals.cls_p75, "", 0.1, 0.25, function (v) { return (Number(v) || 0).toFixed(3); }),
+      perfVital("INP p75", vitals.inp_p75, "ms", 200, 500, function (v) { return fmtNum(v); }),
+      perfVital("load p75", load.load_p75_ms, "ms", 3000, 5000, function (v) { return fmtNum(v); })
+    ].join("");
+    els.perfStats.innerHTML = [
+      stat("首屏传输", fmtNum(load.transfer_kb_p75) + " KB", "p75"),
+      stat("首屏图片", fmtNum(load.image_kb_p75) + " KB", "p75"),
+      stat("DOMContentLoaded", fmtMs(load.dom_p75_ms), "p75"),
+      stat("请求数", fmtNum(load.resources_p75), "p75"),
+      stat("资源失败页面", fmtNum((current.resource_errors || {}).pages), "占打开 " + fmtPct((current.resource_errors || {}).rate)),
+      stat("错误总数", fmtNum(current.overview.errors), "JS + 资源")
+    ].join("");
+    var artwork = current.artwork || { by_phase: [] };
+    var initial = (artwork.by_phase || []).filter(function (phase) { return phase.name === "initial"; })[0] || {};
+    var turn = (artwork.by_phase || []).filter(function (phase) { return phase.name === "turn"; })[0] || {};
+    els.artworkStats.innerHTML = [
+      stat("作品图片加载 p75", fmtMs(artwork.p75_ms), "不含 640ms 翻页动画"),
+      stat("首屏页 p75", fmtMs(initial.p75_ms), "首次进入作品"),
+      stat("翻页 p75", fmtMs(turn.p75_ms), "下一页图片"),
+      stat("慢加载率", fmtPct(artwork.slow_rate), "> 1.5s"),
+      stat("图片失败", fmtNum(artwork.failures), "加载失败次数"),
+      stat("样本", fmtNum(artwork.count), "页面加载")
+    ].join("");
   }
 
   function renderHome(current, previous) {
@@ -1088,6 +1176,35 @@
     if (o.avg_session_ms > 0 && o.avg_session_ms < 20000) {
       add("low", "整体停留偏短", "平均会话有效时长 " + fmtMs(o.avg_session_ms) + "。",
         "首页首屏讲清楚「谁 + 做了什么 + 结果」，让 HR 在 10 秒内知道该点哪个项目。");
+    }
+
+    if (current.boot && current.boot.attempts >= 10) {
+      var boot = current.boot;
+      if (boot.success_rate < 98) {
+        add("high", "网页打开成功率偏低", "打开成功率 " + fmtPct(boot.success_rate) + "（" +
+          fmtNum(boot.failures) + " 次失败 / " + fmtNum(boot.attempts) + " 次尝试）。",
+          "优先排查失败原因（超时 / script.js 加载失败 / JS 错误），并检查首屏图片是否阻塞应用就绪。");
+      } else if (boot.failures > 0) {
+        add("medium", "存在少量打开失败", fmtNum(boot.failures) + " 次失败，成功率 " + fmtPct(boot.success_rate) + "。",
+          "按「失败原因」定位：超时通常是首屏资源过重；script_error 检查 script.js 与 CDN 缓存。");
+      }
+      if (boot.p75_ms > 4000) {
+        add("high", "应用就绪过慢", "打开耗时 p75 = " + fmtMs(boot.p75_ms) + "，慢打开率 " + fmtPct(boot.slow_open_rate) + "。",
+          "首屏只预加载第一张封面、其余改懒加载；检查 script.js 是否被大图或同步请求阻塞。");
+      } else if (boot.slow_open_rate > 30) {
+        add("medium", "慢打开占比偏高", fmtPct(boot.slow_open_rate) + " 的打开超过 3 秒（p75 " + fmtMs(boot.p75_ms) + "）。",
+          "对移动端做封面响应式（640/960/1280）并延迟非首屏图片，观察慢打开率是否下降。");
+      }
+    }
+    if (current.artwork && current.artwork.count >= 20 && current.artwork.p75_ms > 1500) {
+      add("medium", "作品图片加载偏慢", "作品页图片加载 p75 = " + fmtMs(current.artwork.p75_ms) +
+        "，慢加载率 " + fmtPct(current.artwork.slow_rate) + "。",
+        "首屏页优先 1280w 变体；大图 decode 前不要启动翻页动画以外的工作；检查 4K 原图是否被误用。");
+    }
+    if (current.resource_errors && current.resource_errors.pages > 0 && current.overview.errors > 0) {
+      add("medium", "存在资源加载失败", fmtNum(current.resource_errors.pages) + " 个页面出现资源加载错误（" +
+        fmtPct(current.resource_errors.rate) + " 的打开）。",
+        "按资源 URL 修复 404/路径错误；破图会直接影响作品页观感。");
     }
 
     var order = { high: 0, medium: 1, low: 2 };

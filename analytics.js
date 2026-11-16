@@ -677,6 +677,7 @@
     track("page_view", Object.assign({
       screen: screen,
       path: pathOf(),
+      boot_id: (window.__pfBoot && window.__pfBoot.id) || "",
       entry: navType,
       ref: ref.ref,
       ref_type: ref.ref_type,

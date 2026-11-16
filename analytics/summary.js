@@ -77,6 +77,30 @@ function bound(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function trackBootEventFactory(boots) {
+  return function trackBootEvent(event) {
+    const props = event.props || {};
+    const pid = event.pid || event.id;
+    let boot = boots.get(pid);
+    if (!boot) {
+      boot = { pid, startTs: event.ts, lastTs: event.ts, ready: null, fail: null, mode: String(props.mode || ""), path: String(props.path || "") };
+      boots.set(pid, boot);
+    }
+    boot.lastTs = Math.max(boot.lastTs || 0, event.ts);
+    if (event.name === "boot_start") {
+      boot.startTs = Math.min(boot.startTs || event.ts, event.ts);
+      boot.mode = String(props.mode || boot.mode || "");
+      boot.path = String(props.path || boot.path || "");
+    } else if (event.name === "boot_ready") {
+      boot.ready = props;
+      if (!boot.mode) boot.mode = String(props.mode || "");
+    } else if (event.name === "boot_fail") {
+      boot.fail = props;
+      if (!boot.mode) boot.mode = String(props.mode || "");
+    }
+  };
+}
+
 export function buildSummary(rawRows, options = {}) {
   const from = Number(options.from) || 0;
   const to = Number(options.to) || Number.MAX_SAFE_INTEGER;
@@ -104,6 +128,9 @@ export function buildSummary(rawRows, options = {}) {
   const errorGroups = new Map();
   const vitalSamples = new Map();
   const pageLoads = new Map();
+  const boots = new Map();
+  const trackBootEvent = trackBootEventFactory(boots);
+  const artworkLoads = [];
   const homeExitDurations = [];
   const homeExitImpressions = [];
   const homeExitDrags = [];
@@ -163,6 +190,10 @@ export function buildSummary(rawRows, options = {}) {
 
   events.forEach((event) => {
     const props = event.props;
+    if (event.name === "boot_start" || event.name === "boot_ready" || event.name === "boot_fail") {
+      trackBootEvent(event);
+      return;
+    }
     const session = sessionOf(event);
     if (session.vid) visitors.add(session.vid);
 
@@ -395,6 +426,8 @@ export function buildSummary(rawRows, options = {}) {
         if (!existing || props.stage === "final") {
           vitalSamples.set(pid, {
             lcp: Number(props.lcp_ms) || 0,
+            fcp: Number(props.fcp_ms) || 0,
+            load: Number(props.load_ms) || 0,
             cls: Number(props.cls) || 0,
             inp: Number(props.inp_ms) || 0,
             ttfb: Number(props.ttfb_ms) || 0,
@@ -406,9 +439,24 @@ export function buildSummary(rawRows, options = {}) {
       case "page_load": {
         pageLoads.set(event.pid || event.id, {
           load: Number(props.load_ms) || 0,
+          dom: Number(props.dom_ms) || 0,
           transfer: Number(props.transfer_kb) || 0,
           image: Number(props.image_kb) || 0,
           resources: Number(props.resources) || 0
+        });
+        break;
+      }
+      case "artwork_load": {
+        artworkLoads.push({
+          project: String(props.project || ""),
+          projectKey: String(props.project_key || ""),
+          page: Number(props.page) || 0,
+          type: String(props.type || "image"),
+          phase: String(props.phase || "initial"),
+          duration: Number(props.duration_ms) || 0,
+          success: props.success !== false,
+          variant: Number(props.variant_w) || 0,
+          mode: String(props.mode || "")
         });
         break;
       }
@@ -430,6 +478,118 @@ export function buildSummary(rawRows, options = {}) {
         break;
     }
   });
+
+  /* ------------------------------------------------------ boot & load stats */
+
+  const bootList = [...boots.values()];
+  const bootSuccesses = bootList.filter((boot) => Boolean(boot.ready)).length;
+  const bootFailures = bootList.filter((boot) => !boot.ready && boot.fail).length;
+  const bootDurations = bootList
+    .filter((boot) => boot.ready)
+    .map((boot) => Number(boot.ready.duration_ms) || 0)
+    .filter((value) => value > 0);
+  const bootFailReasons = new Map();
+  bootList.forEach((boot) => {
+    if (boot.ready) return;
+    const reason = boot.fail ? String(boot.fail.reason || "unknown") : "incomplete";
+    bootFailReasons.set(reason, (bootFailReasons.get(reason) || 0) + 1);
+  });
+  const bootModes = new Map();
+  bootList.forEach((boot) => {
+    const mode = boot.mode || "unknown";
+    const group = bootModes.get(mode) || { attempts: 0, successes: 0, durations: [] };
+    group.attempts += 1;
+    if (boot.ready) {
+      group.successes += 1;
+      const duration = Number(boot.ready.duration_ms) || 0;
+      if (duration > 0) group.durations.push(duration);
+    }
+    bootModes.set(mode, group);
+  });
+  const boot = {
+    attempts: bootList.length,
+    successes: bootSuccesses,
+    failures: bootFailures,
+    incomplete: bootList.length - bootSuccesses - bootFailures,
+    success_rate: pct(bootSuccesses, bootList.length),
+    p50_ms: Math.round(percentile(bootDurations, 0.5)),
+    p75_ms: Math.round(percentile(bootDurations, 0.75)),
+    avg_ms: Math.round(mean(bootDurations)),
+    slow_open_rate: pct(bootDurations.filter((duration) => duration > 3000).length, bootDurations.length),
+    fail_reasons: [...bootFailReasons.entries()]
+      .map(([name, count]) => ({ name, count, pct: pct(count, bootList.length) }))
+      .sort((a, b) => b.count - a.count),
+    by_mode: [...bootModes.entries()]
+      .map(([name, group]) => ({
+        name,
+        attempts: group.attempts,
+        successes: group.successes,
+        success_rate: pct(group.successes, group.attempts),
+        p75_ms: Math.round(percentile(group.durations, 0.75))
+      }))
+      .sort((a, b) => b.attempts - a.attempts)
+  };
+
+  bootList.forEach((bootEntry) => {
+    const day = dayKey(bootEntry.startTs || bootEntry.lastTs || Date.now(), offset);
+    let bucket = daily.get(day);
+    if (!bucket) {
+      bucket = {
+        date: day, visitors: new Set(), sessions: new Set(), pageviews: 0,
+        home_views: 0, impressions: 0, card_clicks: 0, viewer_opens: 0,
+        about_opens: 0, resume_downloads: 0, boot_attempts: 0, boot_success: 0
+      };
+      daily.set(day, bucket);
+    }
+    bucket.boot_attempts = (bucket.boot_attempts || 0) + 1;
+    if (bootEntry.ready) bucket.boot_success = (bucket.boot_success || 0) + 1;
+  });
+
+  const artwork = {
+    count: artworkLoads.length,
+    failures: artworkLoads.filter((entry) => !entry.success).length,
+    p50_ms: Math.round(percentile(artworkLoads.map((entry) => entry.duration), 0.5)),
+    p75_ms: Math.round(percentile(artworkLoads.map((entry) => entry.duration), 0.75)),
+    avg_ms: Math.round(mean(artworkLoads.map((entry) => entry.duration))),
+    slow_rate: pct(artworkLoads.filter((entry) => entry.duration > 1500).length, artworkLoads.length),
+    by_phase: ["initial", "turn"].map((phase) => {
+      const rows = artworkLoads.filter((entry) => entry.phase === phase);
+      return {
+        name: phase,
+        count: rows.length,
+        p75_ms: Math.round(percentile(rows.map((entry) => entry.duration), 0.75)),
+        slow_rate: pct(rows.filter((entry) => entry.duration > 1500).length, rows.length)
+      };
+    }),
+    by_project: [...new Set(artworkLoads.map((entry) => entry.projectKey))].map((key) => {
+      const rows = artworkLoads.filter((entry) => entry.projectKey === key);
+      return {
+        key,
+        project: rows[0]?.project || "",
+        count: rows.length,
+        p50_ms: Math.round(percentile(rows.map((entry) => entry.duration), 0.5)),
+        p75_ms: Math.round(percentile(rows.map((entry) => entry.duration), 0.75)),
+        slow_rate: pct(rows.filter((entry) => entry.duration > 1500).length, rows.length)
+      };
+    }).sort((a, b) => b.count - a.count).slice(0, 8)
+  };
+
+  const resourceErrorEvents = events.filter((event) => event.name === "error" && event.props.type === "resource");
+  const resourcePages = new Set(resourceErrorEvents.map((event) => event.pid)).size;
+  const resourceGroups = new Map();
+  resourceErrorEvents.forEach((event) => {
+    const key = `${event.props.tag || "resource"}|${event.props.url || ""}`;
+    const group = resourceGroups.get(key) || { tag: event.props.tag || "resource", url: event.props.url || "", count: 0, lastTs: 0 };
+    group.count += 1;
+    group.lastTs = Math.max(group.lastTs, event.ts);
+    resourceGroups.set(key, group);
+  });
+  const resourceErrors = {
+    count: resourceErrorEvents.length,
+    pages: resourcePages,
+    rate: pct(resourcePages, bootList.length || pageLoads.size || 0),
+    top: [...resourceGroups.values()].sort((a, b) => b.count - a.count).slice(0, 10)
+  };
 
   /* --------------------------------------------------------------- sessions */
 
@@ -655,6 +815,8 @@ export function buildSummary(rawRows, options = {}) {
   const vitals = {
     samples: vitalValues.length,
     lcp_p75: Math.round(percentile(vitalValues.map((value) => value.lcp), 0.75)),
+    fcp_p75: Math.round(percentile(vitalValues.map((value) => value.fcp), 0.75)),
+    load_p75: Math.round(percentile(vitalValues.map((value) => value.load), 0.75)),
     cls_p75: Math.round(percentile(vitalValues.map((value) => value.cls), 0.75) * 1000) / 1000,
     inp_p75: Math.round(percentile(vitalValues.map((value) => value.inp), 0.75)),
     ttfb_p75: Math.round(percentile(vitalValues.map((value) => value.ttfb), 0.75))
@@ -665,7 +827,12 @@ export function buildSummary(rawRows, options = {}) {
     avg_transfer_kb: Math.round(mean(loads.map((value) => value.transfer))),
     avg_image_kb: Math.round(mean(loads.map((value) => value.image))),
     avg_load_ms: Math.round(mean(loads.map((value) => value.load))),
-    avg_resources: Math.round(mean(loads.map((value) => value.resources)))
+    avg_resources: Math.round(mean(loads.map((value) => value.resources))),
+    load_p75_ms: Math.round(percentile(loads.map((value) => value.load), 0.75)),
+    dom_p75_ms: Math.round(percentile(loads.map((value) => value.dom), 0.75)),
+    transfer_kb_p75: Math.round(percentile(loads.map((value) => value.transfer), 0.75)),
+    image_kb_p75: Math.round(percentile(loads.map((value) => value.image), 0.75)),
+    resources_p75: Math.round(percentile(loads.map((value) => value.resources), 0.75))
   };
 
   /* ------------------------------------------------------------------ output */
@@ -682,7 +849,9 @@ export function buildSummary(rawRows, options = {}) {
       card_clicks: bucket.card_clicks,
       viewer_opens: bucket.viewer_opens,
       about_opens: bucket.about_opens,
-      resume_downloads: bucket.resume_downloads
+      resume_downloads: bucket.resume_downloads,
+      boot_attempts: bucket.boot_attempts || 0,
+      boot_success: bucket.boot_success || 0
     });
   });
 
@@ -717,6 +886,11 @@ export function buildSummary(rawRows, options = {}) {
     fullscreen_enters: fullscreenEnters,
     video_plays: videoPlays,
     other_project_clicks: otherProjectClicks,
+    open_success_rate: boot.success_rate,
+    boot_attempts: boot.attempts,
+    slow_open_rate: boot.slow_open_rate,
+    artwork_load_p75_ms: artwork.p75_ms,
+    resource_error_pages: resourceErrors.pages,
     errors: [...errorGroups.values()].reduce((sum, entry) => sum + entry.count, 0)
   };
 
@@ -796,6 +970,9 @@ export function buildSummary(rawRows, options = {}) {
     referrers: sortCounts(referrerStats),
     vitals,
     load: loadStats,
+    boot,
+    artwork,
+    resource_errors: resourceErrors,
     errors: [...errorGroups.values()].sort((a, b) => b.count - a.count).slice(0, 20),
     actions: {
       resume_downloads: resumeDownloads,

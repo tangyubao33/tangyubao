@@ -81,6 +81,18 @@ const slideVariants = (src) => {
   }));
 };
 
+/* Cards use the same cover art as viewer page 1 but only need a fraction of
+   its pixels (a 259px-wide card at 2x is ~520 device px). Serving the 3200px
+   JPEG there cost ~3MB on the home screen; the WebP variants cut that ~6x. */
+const coverSrcset = (cover) => {
+  const base = cover.replace(/\.[^.]+$/, "");
+  // 640 is enough for the small home cards (and saves another ~40% there);
+  // larger project / panel cards step up through the existing variants.
+  return [640, 960, 1280, 1920, 2560]
+    .map((width) => `${base}.w${width}.webp ${width}w`)
+    .join(", ");
+};
+
 const isStack = (slide) => Boolean(slide && slide.type === "stack");
 const stackProgress = new WeakMap();
 const stackIndex = (slide) => stackProgress.get(slide) ?? 0;
@@ -102,6 +114,11 @@ const pickSlideSource = (slide) => {
   for (const variant of variants) {
     if (variant.width >= target) return variant.src;
   }
+  // A 1440px fullscreen frame at 2x asks for ~2880px; the 3840px PNG master is
+  // several MB. Up-to-30% upscaling from the 2560 variant is visually free and
+  // avoids that download; only genuinely huge frames fall back to the master.
+  const largest = variants[variants.length - 1];
+  if (largest && target <= Math.round(largest.width * 1.3)) return largest.src;
   return base;
 };
 
@@ -1308,7 +1325,7 @@ function checkCardImpressions() {
 }
 
 function renderTimeline() {
-  elements.timeline.innerHTML = Object.values(experiences).map((experience) => `
+  elements.timeline.innerHTML = Object.values(experiences).map((experience, experienceIndex) => `
     <section class="experience-group" style="--accent:${experience.accent};--mark-bg:${experience.markBg}">
       <header class="group-meta">
         <span class="group-mark${experience.logo ? " has-logo" : ""}" aria-hidden="true">${experience.logo ? `<img src="${experience.logo}" alt="" loading="lazy" decoding="async">` : experience.mark}</span>
@@ -1325,7 +1342,7 @@ function renderTimeline() {
       <div class="group-projects" style="--group-width:calc(${experience.projects.map(() => "var(--stream-card-width)").concat(experience.projects.slice(1).map(() => "var(--group-gap)")).join(" + ")})">
         ${experience.projects.map((project, projectIndex) => `
           <button class="stream-project${project.disabled ? " is-pending" : ""}" type="button" data-home-project="${project.id}" data-home-experience="${experience.id}" aria-label="查看 ${project.name}">
-            <img src="${project.cover}" alt="" loading="lazy">
+            <img src="${project.cover}" srcset="${coverSrcset(project.cover)}" sizes="(max-width: 760px) 74vw, (max-height: 520px) and (min-width: 761px) 26vw, 18vw" alt="" loading="lazy" decoding="async"${experienceIndex === 0 && projectIndex === 0 ? ' fetchpriority="high"' : ""}>
             <span class="stream-project-top"><i>${pad(projectIndex + 1)}</i><em>${project.type}</em></span>
             <span class="stream-project-info">
               <b>${project.name}</b>
@@ -1355,7 +1372,7 @@ function renderProjects() {
 
   elements.projectGrid.innerHTML = experience.projects.map((project, index) => `
     <button class="project-card${project.disabled ? " is-disabled" : ""}" type="button" ${project.disabled ? "disabled" : `data-project="${project.id}"`}>
-      <img src="${project.cover}" alt="" loading="lazy">
+      <img src="${project.cover}" srcset="${coverSrcset(project.cover)}" sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1100px) 44vw, 33vw" alt="" loading="lazy" decoding="async">
       <span class="project-card-number">${pad(index + 1)}</span>
       <span class="project-card-content">
         <span>${project.type}</span>
@@ -1386,12 +1403,29 @@ function renderOtherProjects() {
     const delay = Math.round(60 + 150 * Math.pow(index / span, 2));
     return `
     <button class="other-project" type="button" data-other-project="${project.id}" data-other-experience="${experience.id}" aria-label="查看 ${project.name}" style="--stagger: ${delay}ms">
-      <img src="${project.cover}" alt="" loading="lazy">
+      <img src="${project.cover}" srcset="${coverSrcset(project.cover)}" sizes="(max-width: 760px) 44vw, 190px" alt="" loading="lazy" decoding="async">
       <b>${project.name}</b>
       <em>${experience.company} · ${experience.period}</em>
     </button>`;
   }).join("");
 }
+
+/* Hovering a home card prefetches that project's first viewer page, so the
+   card -> viewer handoff usually starts from a warm 2560px WebP instead of
+   downloading it after the click. Only after the home page has loaded, so it
+   never competes with the covers that are still arriving. */
+let cardPrefetchTimer = 0;
+elements.timeline.addEventListener("pointerover", (event) => {
+  if (event.pointerType && event.pointerType !== "mouse") return;
+  const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
+  if (!card || document.readyState !== "complete") return;
+  window.clearTimeout(cardPrefetchTimer);
+  cardPrefetchTimer = window.setTimeout(() => {
+    const project = experiences[card.dataset.homeExperience]?.projects.find((item) => item.id === card.dataset.homeProject);
+    const first = project?.slides?.[0];
+    if (first) warmSlideImage(first);
+  }, 150);
+});
 
 function openOtherProject(experienceId, projectId, card) {
   const experience = experiences[experienceId];

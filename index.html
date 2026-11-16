@@ -7,6 +7,13 @@
   <meta name="theme-color" content="#111214">
   <title>唐尉保 · 产品设计作品集</title>
   <link rel="icon" href="唐尉保作品集2_files/favicon.ico">
+  <!-- The home covers are rendered by script.js, so the browser would not
+       discover the first one until the JS runs. Preloading the first card's
+       responsive cover starts that request immediately (same URL the card's
+       srcset will pick, so it is not downloaded twice). -->
+  <link rel="preload" as="image" href="assets/thumbs/douyin-platform.w960.webp"
+        imagesrcset="assets/thumbs/douyin-platform.w640.webp 640w, assets/thumbs/douyin-platform.w960.webp 960w, assets/thumbs/douyin-platform.w1280.webp 1280w, assets/thumbs/douyin-platform.w1920.webp 1920w, assets/thumbs/douyin-platform.w2560.webp 2560w"
+        imagesizes="(max-width: 760px) 74vw, (max-height: 520px) and (min-width: 761px) 26vw, 18vw">
   <style>html.is-booting [data-screen] { visibility: hidden; } html.is-booting body { background: #111214; }</style>
   <!-- 埋点上报地址（Cloudflare Worker + D1，部署见 analytics/README.md）。
        本地 file:// / localhost 预览默认不上报，只有显式传 ?analytics_endpoint= 时才会上报。 -->
@@ -386,6 +393,6 @@
 
   <noscript>请启用 JavaScript 以浏览交互式作品集。</noscript>
   <script src="analytics.js?v=20261116p" defer></script>
-  <script src="script.js?v=20261116r" defer></script>
+  <script src="script.js?v=20261116t" defer></script>
 </body>
 </html>

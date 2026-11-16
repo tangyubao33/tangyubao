@@ -224,6 +224,9 @@
 - **口径**：会话 30 分钟无操作即新会话；查看器以 `viewer_id` 的「打开→离开」为单位聚合页面深度/停留/跳出；曝光 = 卡片 ≥50% 可见 500ms 且每页加载去重；简历下载记录的是点击意图。完整事件表见 `analytics/README.md §3`。
 - **隐私**：无 Cookie、不存 IP/UA/指纹/输入内容、不接第三方；仅匿名 `vid`/`sid`/白名单 props；DNT/GPC 默认关闭；保留 180 天。看板令牌只走 Authorization/sessionStorage，禁止写入公开链接或仓库。
 - **本地隔离**：`file://` 与 `localhost` 默认不启用（不发请求、不写队列），避免站主调试污染线上；自动化验收用 `?analytics_endpoint=<collector>` 显式开启。改 `analytics.js`/`script.js` 时同步提升 `?v=`。
+- **打开成功率探针**：`index.html` 里的内联小脚本独立上报 `boot_start / boot_ready / boot_fail`（不依赖 analytics.js，业务脚本 404/超时也能统计）；就绪判定 = 不再 `is-booting` 且首页有卡片/查看器已激活；10s 超时、`script.js` 加载失败、JS 错误分别记录；本地预览默认跳过。不得把它改成依赖主脚本或第三方 SDK，也不要在探针里采集额外个人信息。
+- **加载性能**：`page_load` 记录 load/DOM/传输/图片体积/请求数；`web_vitals` 记录 LCP/FCP/CLS/INP/TTFB；`artwork_load` 记录作品页图片选图→解码耗时（phase 分 initial/turn，不含 640ms 翻页动画）。聚合输出 `boot`、`artwork`、`resource_errors` 与 `vitals/load` 的 p75；看板「打开成功率 & 加载性能」板块消费这些字段。
+
 - **数据端**：`analytics/summary.js` 是唯一聚合实现（Worker/本地共用），看板只读 `/api/summary` 的 `{current, previous}`；新增作品同步 `PROJECTS` 注册表。改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序执行并跑 `node analytics/tools/verify-summary.mjs`。
 - **运维**：`cd analytics/worker && wrangler deploy`；D1 备份 `wrangler d1 export`；删访客数据 `DELETE FROM events WHERE vid=…`；保留策略由 cron 清理；`workers.dev` 国内不稳时绑定自定义域名。
 
@@ -364,3 +367,5 @@
 
 - **2026-11-16**：看板改为默认直连线上 Worker（`DEFAULT_API`），并支持 `#token=…` 单地址访问（hash 不随 Referer 发送）；`?api=` 仍可覆盖、`?demo=1` 仍为示例数据。手机/新浏览器用一个收藏链接即可直接看数据，令牌只留在地址栏和历史中，不写入仓库。
 - **2026-11-16**：Cloudflare Worker + D1 实际部署完成（`tangyubao-analytics.tangweibao.workers.dev`，D1 `tangyubao-analytics` / `422352f9-91df-44b9-bbd8-f62df30dedf8`），`DASHBOARD_TOKEN` 用 secret 写入；`index.html` meta 切到线上 collector，看板支持 `?token=` 并转存 sessionStorage。同时给 `analytics.js` 加本地预览隔离（`file://`/localhost 默认不上报，需 `?analytics_endpoint=` 才上报）。验收：`/health` 200、`/collect` 收事件、`/api/summary` 需 Bearer、测试事件清理后归零。
+
+- **2026-11-16**：新增「网页打开成功率 + 加载性能」监控层：`index.html` 内联启动探针（boot_start/ready/fail，独立于 analytics.js）、`artwork_load`（作品图加载耗时，首屏/翻页分开）、Web Vitals 增补 FCP/load、资源失败聚合；`summary.js` 输出 `boot/artwork/resource_errors` 与 p75，看板新增对应板块、趋势与诊断规则。本地验收：正常打开 100% 成功、阻断 script.js 上报 script_error、图片首屏/翻页 p75 可读。

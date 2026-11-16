@@ -93,6 +93,21 @@ export function generateSampleEvents(options = {}) {
     });
   };
 
+  // Boot probe events are page-scoped (sid/vid are placeholders) and must not
+  // turn into sessions in the aggregation.
+  const pushBoot = (bootId, name, ts, props) => {
+    events.push({
+      id: makeId("e"),
+      ts: Math.round(ts),
+      sid: "boot",
+      vid: "boot",
+      pid: bootId,
+      screen: "boot",
+      name,
+      props: Object.assign({}, props || {})
+    });
+  };
+
   const dayStart = (date) => {
     const [year, month, day] = date.split("-").map(Number);
     return Date.UTC(year, month - 1, day, 0, 0, 0) - 8 * 3600 * 1000;
@@ -132,6 +147,45 @@ export function generateSampleEvents(options = {}) {
         active: 0
       };
       const sessionNew = chance(0.6);
+      const bootId = makeId("boot");
+      const bootDuration = mode === "mobile" ? rndInt(1600, 4800) : rndInt(900, 3200);
+      const bootStart = ts - bootDuration - rndInt(60, 220);
+      pushBoot(bootId, "boot_start", bootStart, {
+        path: "/tangyubao/",
+        mode,
+        vw: viewport.w,
+        vh: viewport.h,
+        dpr: mode === "mobile" ? 3 : 2,
+        lang: "zh-CN",
+        tz: "Asia/Shanghai",
+        reduced_motion: false
+      });
+      if (chance(0.015)) {
+        pushBoot(bootId, "boot_fail", bootStart + rndInt(5000, 10000), {
+          reason: chance(0.6) ? "timeout" : "script_error",
+          elapsed_ms: rndInt(5000, 10000),
+          message: "script.js load failed",
+          ready_state: "interactive",
+          mode,
+          vw: viewport.w,
+          vh: viewport.h,
+          dpr: mode === "mobile" ? 3 : 2
+        });
+        continue;
+      }
+      pushBoot(bootId, "boot_ready", ts - rndInt(80, 240), {
+        duration_ms: bootDuration,
+        slow: bootDuration > 3000,
+        ready_state: "complete",
+        cards: 6,
+        mode,
+        vw: viewport.w,
+        vh: viewport.h,
+        dpr: mode === "mobile" ? 3 : 2,
+        ttfb: rndInt(250, 900),
+        dom_ms: Math.round(bootDuration * 0.6),
+        load_ms: Math.round(bootDuration * 0.95)
+      });
       push(session, "page_view", ts, {
         screen: "home",
         path: "/tangyubao/",
@@ -301,6 +355,7 @@ export function generateSampleEvents(options = {}) {
 
       const vitals = {
         lcp_ms: mode === "mobile" ? rndInt(2100, 4800) : rndInt(1300, 3200),
+        fcp_ms: mode === "mobile" ? rndInt(1200, 2600) : rndInt(700, 1600),
         cls: Math.round(rand() * 90) / 1000,
         inp_ms: rndInt(90, 380),
         ttfb_ms: rndInt(280, 900)
@@ -346,6 +401,17 @@ export function generateSampleEvents(options = {}) {
     let page = 1;
     let cursor = startTs + rndInt(600, 1800);
     let totalDwell = 0;
+    push(session, "artwork_load", cursor - 100, {
+      project: project.id,
+      project_key: project.key,
+      page: 1,
+      type: "image",
+      phase: "initial",
+      duration_ms: mode === "mobile" ? rndInt(500, 2200) : rndInt(250, 1200),
+      success: true,
+      variant_w: mode === "mobile" ? 1280 : 2560,
+      mode
+    });
     push(session, "viewer_slide", cursor, {
       viewer_id: viewerId,
       project: project.id,
@@ -379,6 +445,17 @@ export function generateSampleEvents(options = {}) {
         first_view: true,
         prev_page: page - 1,
         prev_dwell_ms: dwell
+      });
+      push(session, "artwork_load", cursor - 80, {
+        project: project.id,
+        project_key: project.key,
+        page,
+        type: "image",
+        phase: "turn",
+        duration_ms: mode === "mobile" ? rndInt(220, 1800) : rndInt(120, 1100),
+        success: true,
+        variant_w: mode === "mobile" ? 1280 : 2560,
+        mode
       });
     }
     const lastDwell = rndInt(1800, 9000);

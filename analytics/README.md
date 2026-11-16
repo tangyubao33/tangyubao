@@ -63,6 +63,10 @@ http://127.0.0.1:8788/?analytics_endpoint=http%3A%2F%2F127.0.0.1%3A8788%2Fcollec
 | 关于我打开率 | 打开过弹窗的会话 / 全部会话 | 两个入口合并 |
 | 简历下载 | 点击 `.about-download` 的次数 / 会话 | 是「下载意图」；浏览器是否落盘无法判断 |
 | 下载 / 关于我 | 下载次数 / 关于我打开次数 | 衡量弹窗内转化 |
+| 网页打开成功率 | `boot_ready` / `boot_start` | 内联启动探针统计，独立于 analytics.js；超时/关键脚本失败计失败 |
+| 应用就绪耗时 | `boot_ready.duration_ms` | 导航开始 → 首页/查看器渲染完成；p75、慢打开率（>3s） |
+| 打开失败原因 | `boot_fail.reason` | timeout / js_error / script_error / incomplete |
+| 作品图片加载 | `artwork_load.duration_ms` | 选图到解码完成，**不含** 640ms 翻页动画；分首屏页/翻页 |
 | 平均会话时长 | `session_end.active_ms`（隐藏标签页时间不计） | 30 分钟会话上限 |
 | Web Vitals | LCP / CLS / INP / TTFB 的 p75 | 按页面实例取最终值 |
 | 无交互会话 | 只看首页、无滚动/点击/打开/关于我/下载 | 首页第一眼是否讲清价值 |
@@ -77,7 +81,10 @@ http://127.0.0.1:8788/?analytics_endpoint=http%3A%2F%2F127.0.0.1%3A8788%2Fcollec
 
 | 事件 | 触发时机 | 关键 props |
 |---|---|---|
-| `page_view` | 页面加载（每页一次） | `screen, path, ref, ref_type, visitor_new, session_new, visits, vw, vh, dpr, lang, tz, conn, mode, reduced_motion, utm_*` |
+| `boot_start` | `index.html` 内联探针，页面脚本开始执行 | `path, ref, mode, vw, vh, dpr, lang, tz, reduced_motion` |
+| `boot_ready` | 应用真正渲染完成（不再 `is-booting`、首页有卡片/查看器已激活） | `duration_ms, slow, ready_state, cards, mode, ttfb_ms, dom_ms, load_ms` |
+| `boot_fail` | 超时/关键脚本失败/JS 错误 | `reason, elapsed_ms, message, ready_state, mode` |
+| `page_view` | 页面加载（每页一次） | `screen, path, boot_id, ref, ref_type, visitor_new, session_new, visits, vw, vh, dpr, lang, tz, conn, mode, reduced_motion, utm_*` |
 | `screen_view` | 屏幕切换（home/projects/viewer） | `screen, from, dwell_ms, path` |
 | `home_view` | 每次进入首页 | `cards, experiences, visitor_new, session_new, returning, mode, vw, vh` |
 | `home_exit` | 离开首页 | `duration_ms, impressions, drags, hovers, max_progress, scroll_buckets, mode` |
@@ -88,6 +95,7 @@ http://127.0.0.1:8788/?analytics_endpoint=http%3A%2F%2F127.0.0.1%3A8788%2Fcollec
 | `viewer_open` | 打开作品查看器 | `viewer_id, project, project_key, name, experience, company, pages, content_pages, origin, visitor_new, mode` |
 | `viewer_slide` | 每次切换页面（含叠层页） | `viewer_id, project, page, total, content_pages, type(image/composite/stack/thank), source(initial/thumbnail/wheel/keyboard/swipe/click), first_view, prev_page, prev_dwell_ms` |
 | `stack_step` | 叠层页切层 | `project, page, from_layer, to_layer, total_layers, direction, source` |
+| `artwork_load` | 作品页图片加载/解码完成（每次选图） | `project, project_key, page, type, phase(initial/turn), duration_ms, success, variant_w, mode` |
 | `viewer_exit` | 离开查看器 / 关闭页面 | `viewer_id, project, total, content_pages, max_index, exit_index, slides_viewed, duration_ms, bounce, quick_exit, reached_last_content, reached_thank, max_percent, fullscreen, last_dwell_ms, exit_reason` |
 | `fullscreen_toggle` | 进入/退出全屏 | `entering, project, page` |
 | `video_play` | 复合页视频播放 | `project, page, video_id, label, muted` |
@@ -173,7 +181,7 @@ https://tangyubao33.github.io/tangyubao/analytics/dashboard.html#token=<DASHBOAR
 
 `#` 后面的内容不会出现在 Referer 里，但会留在地址栏/浏览器历史，**只当作个人书签使用，不要公开分享**。`?api=https://<worker>` 仍可覆盖默认地址（用于其他 Worker 实例），`?demo=1` 查看内置示例数据。
 
-看板支持：7/14/30/90 天切换、刷新、导出 CSV、点击项目查看逐页到达率、点击图例切换趋势指标、自动体验诊断。
+看板支持：7/14/30/90 天切换、刷新、导出 CSV、点击项目查看逐页到达率、点击图例切换趋势指标、自动体验诊断；「打开成功率 & 加载性能」板块包含启动探针成功率、失败原因、应用就绪耗时、LCP/FCP/TTFB/DOM/load/CLS/INP、首屏体积、作品页图片加载 p75 和资源失败。
 
 > 看板本身是静态文件；**不部署也没关系**，本地打开即可。仓库里带的是示例数据，不含真实访问记录。
 
@@ -251,8 +259,13 @@ node --check script.js
     funnel: { browse: [...], convert: [...] },
     devices: [{ name, sessions, pct, viewer_opens, bounce_rate, completion_rate, avg_depth_pct }],
     referrers: [{ name, sessions, pct }],
-    vitals: { samples, lcp_p75, cls_p75, inp_p75, ttfb_p75 },
-    load: { samples, avg_transfer_kb, avg_image_kb, avg_load_ms, avg_resources },
+    vitals: { samples, lcp_p75, fcp_p75, load_p75, cls_p75, inp_p75, ttfb_p75 },
+    load: { samples, avg_transfer_kb, avg_image_kb, avg_load_ms, avg_resources,
+            load_p75_ms, dom_p75_ms, transfer_kb_p75, image_kb_p75, resources_p75 },
+    boot: { attempts, successes, failures, incomplete, success_rate,
+            p50_ms, p75_ms, avg_ms, slow_open_rate, fail_reasons, by_mode },
+    artwork: { count, failures, p50_ms, p75_ms, avg_ms, slow_rate, by_phase, by_project },
+    resource_errors: { count, pages, rate, top },
     errors: [{ type, message, url, count, lastTs }],
     actions: { resume_downloads, contact_clicks, fullscreen_enters, video_plays, other_project_clicks }
   },
