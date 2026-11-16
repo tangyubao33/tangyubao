@@ -2624,6 +2624,11 @@ window.addEventListener("pointermove", (event) => {
   const distance = event.clientX - streamDrag.x;
   if (!streamDrag.moved && Math.abs(distance) > STREAM_DRAG_THRESHOLD) {
     streamDrag.moved = true;
+    // a drag suspends the hover accordion: drop the expanded state (and its
+    // dimming) so the row does not change width while the user is panning it
+    const expanded = elements.timeline.querySelector(".stream-project.is-expanded");
+    resetHoverReveal();
+    if (expanded) trackAccordion(expanded);
     elements.streamShell.classList.add("is-dragging");
   }
   if (!streamDrag.moved || !stream.max) return;
@@ -2633,13 +2638,27 @@ window.addEventListener("pointermove", (event) => {
 
 function endStreamDrag(event) {
   if (!streamDrag || (event && event.pointerId !== streamDrag.id)) return;
-  if (streamDrag.moved) {
+  const dragged = streamDrag.moved;
+  if (dragged) {
     suppressStreamClick = true;
     window.setTimeout(() => { suppressStreamClick = false; }, 400);
   }
   streamDrag = null;
   stream.dragging = false;
   elements.streamShell.classList.remove("is-dragging");
+  if (dragged) {
+    // a drag suspends the hover accordion; after releasing, re-arm it for the
+    // card that happens to be under the pointer (there is no pointerover then)
+    const expanded = elements.timeline.querySelector(".stream-project.is-expanded");
+    resetHoverReveal();
+    if (expanded) trackAccordion(expanded);
+    const under = event ? document.elementFromPoint(event.clientX, event.clientY) : null;
+    const card = under instanceof Element ? under.closest(".stream-project") : null;
+    if (card) {
+      hoveredStreamCard = card;
+      armStreamHover(card);
+    }
+  }
   runStream();
 }
 
@@ -2675,7 +2694,7 @@ function revealStreamCard(card) {
   if (!item) return;
   const group = card.closest(".group-projects");
   const expanded = group ? parseFloat(getComputedStyle(group).getPropertyValue("--expanded-card-width")) : NaN;
-  const open = card.matches(":hover, :focus-visible");
+  const open = card.classList.contains("is-expanded") || card.matches(":focus-visible");
   const width = open && Number.isFinite(expanded) && expanded > 0 ? Math.max(item.width, expanded) : item.width;
   const left = item.center - item.width / 2 + stream.origin - stream.current - stream.shift;
   const gutter = Math.min(stream.viewport, parseFloat(getComputedStyle(elements.streamShell).paddingRight) || REVEAL_MARGIN);
@@ -2692,9 +2711,39 @@ function revealStreamCard(card) {
 }
 
 let hoveredStreamCard = null;
+let streamHoverTimer = 0;
+
+/* Hovering a cover expands it only after a short pause: sliding the pointer
+   across the stream (or accidentally crossing it) must not pop the accordion.
+   The visual hover states are driven by `.is-expanded` (see styles.css), which
+   is added 150ms after the pointer settles on a card; leaving clears it at
+   once so the collapse still starts immediately. Keyboard focus stays instant. */
+const STREAM_HOVER_DELAY = 150;
+
+function setStreamExpanded(card, expanded) {
+  if (!card) return;
+  card.classList.toggle("is-expanded", expanded);
+  const anyExpanded = elements.timeline.querySelector(".stream-project.is-expanded");
+  elements.streamShell.classList.toggle("is-hovering", Boolean(anyExpanded));
+}
+
+function armStreamHover(card) {
+  window.clearTimeout(streamHoverTimer);
+  streamHoverTimer = window.setTimeout(() => {
+    if (hoveredStreamCard !== card || stream.dragging) return;
+    setStreamExpanded(card, true);
+    // start following the accordion shift only when it really expands
+    trackAccordion(card);
+  }, STREAM_HOVER_DELAY);
+}
 
 function resetHoverReveal() {
+  window.clearTimeout(streamHoverTimer);
   hoveredStreamCard = null;
+  elements.timeline.querySelectorAll(".stream-project.is-expanded").forEach((card) => {
+    card.classList.remove("is-expanded");
+  });
+  elements.streamShell.classList.remove("is-hovering");
 }
 
 function resetAccordionShift() {
@@ -2706,11 +2755,18 @@ function resetAccordionShift() {
 }
 
 elements.streamShell.addEventListener("pointerover", (event) => {
-  if (event.pointerType !== "mouse") return;
+  if (event.pointerType !== "mouse" || stream.dragging) return;
   const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
   if (!card || card === hoveredStreamCard) return;
+  const previous = hoveredStreamCard;
   hoveredStreamCard = card;
-  trackAccordion(card);
+  window.clearTimeout(streamHoverTimer);
+  if (previous && previous !== card && previous.classList.contains("is-expanded")) {
+    setStreamExpanded(previous, false);
+    // follow that collapse so the track offset returns with the width
+    trackAccordion(previous);
+  }
+  armStreamHover(card);
 });
 
 elements.streamShell.addEventListener("pointerout", (event) => {
@@ -2719,10 +2775,14 @@ elements.streamShell.addEventListener("pointerout", (event) => {
   if (!card) return;
   const next = event.relatedTarget;
   if (next instanceof Element && card.contains(next)) return;
-  if (hoveredStreamCard !== card) return;
-  hoveredStreamCard = null;
-  // keep following the collapse so the offset returns with the width
-  trackAccordion(card);
+  if (hoveredStreamCard !== card && !card.classList.contains("is-expanded")) return;
+  window.clearTimeout(streamHoverTimer);
+  if (hoveredStreamCard === card) hoveredStreamCard = null;
+  if (card.classList.contains("is-expanded")) {
+    setStreamExpanded(card, false);
+    // keep following the collapse so the offset returns with the width
+    trackAccordion(card);
+  }
 });
 
 elements.timeline.addEventListener("transitionend", (event) => {
