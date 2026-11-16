@@ -44,7 +44,7 @@ const jdSlides = Array.from({ length: 37 }, (_, index) => {
   const extension = [22, 33].includes(number) ? "jpg" : "png";
   return {
     src: `${assetRoot}/图片${number}.${extension}`,
-    thumb: `assets/slide-thumbs/jd-${pad(number)}.jpg`,
+    thumb: `assets/slide-thumbs/jd-${pad(number)}.webp`,
     alt: `京东数坊案例第 ${number} 页`
   };
 });
@@ -52,7 +52,7 @@ const jdSlides = Array.from({ length: 37 }, (_, index) => {
 const kingsoftPages = [30, 31, 32, 33, 34, 35, 37, 38, 40, 41];
 const kingsoftSlides = kingsoftPages.map((number, index) => ({
   src: `${assetRoot}/C端${number}.png`,
-  thumb: `assets/slide-thumbs/kingsoft-${pad(index + 1)}.jpg`,
+  thumb: `assets/slide-thumbs/kingsoft-${pad(index + 1)}.webp`,
   alt: `金山词霸案例第 ${index + 1} 页`
 }));
 
@@ -136,16 +136,25 @@ const WARM_IMAGE_LIMIT = 4;
 /* Neighbours are warmed only after the page the visitor is looking at has
    decoded, so a slow link spends its bandwidth on the visible artwork first.
    Turns get a ~640ms head start while the slide animation runs. */
-function warmViewerNeighbors() {
+function warmViewerNeighbors(immediate = true) {
   if (state.screen !== "viewer") return;
   const project = currentProject();
   if (!project?.slides?.length) return;
   const index = state.slideIndex;
-  [1, 2, -1].forEach((offset) => {
+  const warm = (offset) => {
     const preloadIndex = index + offset;
     if (preloadIndex < 0 || preloadIndex >= project.slides.length) return;
     warmSlideImage(project.slides[preloadIndex]);
-  });
+  };
+  warm(1);
+  warm(-1);
+  if (immediate) {
+    warm(2);
+    return;
+  }
+  window.setTimeout(() => {
+    if (state.screen === "viewer" && state.slideIndex === index) warm(2);
+  }, 900);
 }
 function warmSlideImage(slide) {
   if (isStack(slide)) {
@@ -218,7 +227,7 @@ const readingSlide = {
   src: "assets/demo/ai-reading-01-preview.jpg",
   variants: slideVariants("assets/demo/ai-reading-01-preview.jpg"),
   background: "assets/demo/ai-reading-01.png",
-  thumb: "assets/slide-thumbs/ai-reading-01.jpg",
+  thumb: "assets/slide-thumbs/ai-reading-01.webp",
   alt: "亲声伴读：iOS 端 AI 开发实践（PPT 背景图 + 演示视频）",
   overlays: [
     {
@@ -248,7 +257,7 @@ const buildWorksSlides = (folder, count, thumbPrefix, label) =>
     return {
       src,
       variants: slideVariants(src),
-      thumb: `assets/slide-thumbs/${thumbPrefix}-${number}.jpg`,
+      thumb: `assets/slide-thumbs/${thumbPrefix}-${number}.webp`,
       alt: `${label}第 ${index + 1} 页`
     };
   });
@@ -258,7 +267,7 @@ const platformSlide = (number, displayNumber) => {
   return {
     src,
     variants: slideVariants(src),
-    thumb: `assets/slide-thumbs/byte-platform-${pad(number)}.jpg`,
+    thumb: `assets/slide-thumbs/byte-platform-${pad(number)}.webp`,
     alt: `抖音创作服务平台案例第 ${displayNumber} 页`
   };
 };
@@ -310,7 +319,7 @@ const bytedanceOtherSlides = bytedanceOtherOrder.map((fileNumber, index) => {
       src: `${bytedanceWorks}/other/01-preview.jpg`,
       background: otherVideoBackground,
       variants: slideVariants(`${bytedanceWorks}/other/01-preview.jpg`),
-      thumb: "assets/slide-thumbs/byte-other-01.jpg",
+      thumb: "assets/slide-thumbs/byte-other-01.webp",
       alt: "抖音其他项目案例第 3 页（含视频演示）",
       overlays: [
         {
@@ -336,7 +345,7 @@ const bytedanceOtherSlides = bytedanceOtherOrder.map((fileNumber, index) => {
   return {
     src,
     variants: slideVariants(src),
-    thumb: `assets/slide-thumbs/byte-other-${pad(fileNumber)}.jpg`,
+    thumb: `assets/slide-thumbs/byte-other-${pad(fileNumber)}.webp`,
     alt: `抖音其他项目案例第 ${index + 1} 页`
   };
 });
@@ -348,7 +357,7 @@ bytedanceAiCoverSlides[5] = {
   src: `${bytedanceWorks}/ai-cover/06-preview.jpg`,
   background: aiCover39Background,
   variants: slideVariants(`${bytedanceWorks}/ai-cover/06-preview.jpg`),
-  thumb: "assets/slide-thumbs/byte-ai-cover-06.jpg",
+  thumb: "assets/slide-thumbs/byte-ai-cover-06.webp",
   alt: "抖音 AI 封面案例第 6 页（含视频演示）",
   overlays: [
     {
@@ -387,7 +396,7 @@ bytedanceAiCoverSlides[6] = {
   src: `${bytedanceWorks}/ai-cover/07-preview.jpg`,
   background: aiCoverVideoBackground,
   variants: slideVariants(`${bytedanceWorks}/ai-cover/07-preview.jpg`),
-  thumb: "assets/slide-thumbs/byte-ai-cover-07.jpg",
+  thumb: "assets/slide-thumbs/byte-ai-cover-07.webp",
   alt: "抖音 AI 封面案例第 7 页（含视频演示）",
   overlays: aiCoverVideoBoxes.map((item, index) => ({
     kind: "video",
@@ -549,7 +558,7 @@ const BACK_COVER_SLIDE = {
   closing: true,
   src: "assets/works/back-cover.png",
   variants: slideVariants("assets/works/back-cover.png"),
-  thumb: "assets/slide-thumbs/back-cover.jpg",
+  thumb: "assets/slide-thumbs/back-cover.webp",
   alt: "封底 · 感谢观看",
   // The printed TEL / E-MAIL line stays clickable, like the old closing page.
   links: [
@@ -1454,7 +1463,13 @@ elements.timeline.addEventListener("pointerover", (event) => {
   cardPrefetchTimer = window.setTimeout(() => {
     const project = experiences[card.dataset.homeExperience]?.projects.find((item) => item.id === card.dataset.homeProject);
     const first = project?.slides?.[0];
-    if (first) warmSlideImage(first);
+    if (first) {
+      warmSlideImage(first);
+      const small = new Image();
+      small.decoding = "async";
+      small.src = initialArtworkSource(first);
+      if (typeof small.decode === "function") small.decode().catch(() => {});
+    }
   }, 150);
 });
 
@@ -1510,7 +1525,11 @@ function renderViewer() {
     const videoCount = slideVideoCount(slide);
     const badge = videoCount ? `<i class="thumbnail-play" aria-hidden="true">▶${videoCount > 1 ? videoCount : ""}</i>` : "";
     const label = `查看第 ${index + 1} 页${videoCount ? "（含视频）" : ""}`;
-    const visual = `<img src="${slideThumb(slide)}" alt="" loading="lazy">`;
+    const thumbSrc = slide.thumb && slide.thumb.endsWith(".webp") ? slide.thumb : slideThumb(slide);
+    const thumbSmall = slide.thumb && slide.thumb.endsWith(".webp") ? slide.thumb.replace(/\.webp$/, ".w240.webp") : "";
+    // The rail renders at ~120px CSS wide; a 240px source is exact at 2x and
+    // half the bytes of the 320px one (mobile 3x still picks the 320px).
+    const visual = `<img src="${thumbSrc}"${thumbSmall ? ` srcset="${thumbSmall} 240w, ${thumbSrc} 320w" sizes="120px"` : ""} alt="" loading="lazy" decoding="async" fetchpriority="low">`;
     return `
     <button class="thumbnail${index === state.slideIndex ? " is-current" : ""}" type="button" data-slide-index="${index}" role="option" aria-selected="${index === state.slideIndex}" tabindex="${index === state.slideIndex ? 0 : -1}" aria-label="${label}">
       ${visual}
@@ -1581,7 +1600,7 @@ function markArtworkReady() {
   elements.artworkFrame.style.backgroundImage = "";
   sizeArtworkFrame();
   finishArtworkLoad(true);
-  warmViewerNeighbors();
+  warmViewerNeighbors(false);
   window.setTimeout(refreshArtworkResolution, 60);
 }
 
@@ -1597,6 +1616,21 @@ function setArtworkPlaceholder(slide) {
   elements.artworkFrame.style.backgroundPosition = "center";
 }
 
+// On the first paint of an opened project, decode a half-resolution variant so
+// the artwork appears in roughly a third of the time; refreshArtworkResolution()
+// then upgrades it to the full device-pixel variant once that has decoded. The
+// page ends at the same 2560 bitmap as before, so final quality is unchanged.
+const INITIAL_VIEWER_WIDTH = 1280;
+function initialArtworkSource(slide) {
+  const wanted = pickSlideSource(slide);
+  const variants = activeVisualSlide(slide)?.variants;
+  if (!variants?.length) return wanted;
+  const wantedVariant = variants.find((variant) => variant.src === wanted);
+  if (!wantedVariant || wantedVariant.width <= INITIAL_VIEWER_WIDTH) return wanted;
+  const initial = variants.find((variant) => variant.width === INITIAL_VIEWER_WIDTH) || variants[0];
+  return initial.width < wantedVariant.width ? initial.src : wanted;
+}
+
 function placeArtwork(slide) {
   beginArtworkLoad(slide, "initial");
   elements.artwork.classList.add("is-loading");
@@ -1608,7 +1642,7 @@ function placeArtwork(slide) {
     finishArtworkLoad(false);
     markArtworkReady();
   };
-  elements.artwork.src = pickSlideSource(slide);
+  elements.artwork.src = initialArtworkSource(slide);
   elements.artwork.alt = slide.alt || "";
   renderSlideLinks(slide);
   renderOverlays(slide);
@@ -2213,7 +2247,7 @@ function moveArtwork(slide, direction) {
     // slide; otherwise the incoming layer can be blank for a frame.
     whenImageDecoded(elements.artwork, () => {
       if (token !== slideAnimToken) return;
-      warmViewerNeighbors();
+      warmViewerNeighbors(true);
       void elements.artwork.offsetWidth;
       const easing = "cubic-bezier(.76, 0, .24, 1)";
       const duration = 640;

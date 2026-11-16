@@ -21,10 +21,10 @@
 | `script.js` | 数据、hash 路由、横向工作流（阻尼/拖拽）、查看器、缩略图、「关于我」弹窗、焦点管理；同时是埋点触发点（卡片曝光/点击、查看器、关于我、简历下载等） |
 | `analytics.js` | 无依赖埋点采集器（无 cookie、批量上报、心跳/Web Vitals/错误、DNT/GPC 降级）；未配置 endpoint 时只写本地调试环 |
 | `analytics/` | 埋点数据层：共享聚合 `summary.js`、本地 collector `local/`、Cloudflare Worker `worker/`、自包含看板 `dashboard.html`、示例数据与工具；说明见 `analytics/README.md`、分析见 `analytics/体验分析报告.md`。不参与 GitHub Pages 站点构建，但会随仓库发布 |
-| `assets/fonts/` | Caveat / Kalam woff2（手写体强调） |
+| `assets/fonts/` | Caveat / Kalam woff2（手写体强调）。`caveat-600.woff2` 已子集化为 **2.5KB**（仅数字 0–9 与 `~`，只服务「2016~2026」）；`caveat-600.source.woff2` 是未子集的母版（51KB，不直接引用，改文案后用它重新子集）。Kalam 未被引用，仅作 fallback。 |
 | `assets/marks/` | 三家公司图标：第一段经历用 `douyin.webp`（抖音，黑底圆角 + 音符，183px）、`jd.webp`、`kingsoft.webp`；均为 180–183px RGBA 透明圆角。`bytedance.webp`（字节跳动蓝色柱状标）保留但已不再引用 |
 | `assets/thumbs/` | 卡片封面（允许压缩）：抖音四个项目 + 金山词霸由 5760×3240 设计稿压成 `douyin-platform / douyin-ai-cover / douyin-other / douyin-ai-practice / mobile.jpg`（3200×1800 JPEG q84，~370–520 KB）；JD 由 `唐尉保作品集2_files/图片1.png`（3840×2160）导出同规格 `jd.jpg`。高分辨率是为了让竖长裁切 + 2× DPR 的卡片不糊 |
-| `assets/slide-thumbs/` | 查看器缩略图（16:9，320×180；`byte-*` 为抖音四个项目、`jd/kingsoft` 为历史项目、`back-cover.jpg` 为统一封底） |
+| `assets/slide-thumbs/` | 查看器缩略图（16:9，WebP；`byte-*` 为抖音四个项目、`jd/kingsoft` 为历史项目、`back-cover.webp` 为统一封底）。每张同时有 320×180 基线与 `*.w240.webp`（240×135），缩略图栏用 `srcset` 240/320 按 DPR 选档。 |
 | `assets/works/bytedance/` | 2026 作品材料导入的抖音四个项目：`platform`（24 页；图库 7–11、13–16、17–20、25–26 页各合并为 1 页原位渐隐叠加，进入始终从首层开始，缩略图取最终层；开场 6 页按图库 1/2/5/3/6/4 排布）、`ai-cover`（9 页）、`other`（5 页）、`ai-practice`（5 页图片 + 1 页复合视频）；原图均为原始 3840×2160 PNG，不做缩放/有损压缩；每页旁边有 `.w960/.w1280/.w1920/.w2560.webp` 响应式变体（q95）。其中 `other/01.jpg`、`ai-cover/06.jpg`、`ai-cover/07.jpg` 已换成 2026 图库的 5760×3240 视频页背景；视频页另生成 `*-preview.jpg`（背景 + poster 合成，用于统一翻页） |
 | `assets/works/` | 统一封底 `back-cover.png`（由图库 `2026 作品材料/作品网站图库/01 作品封面/封底.jpg` 转 3840×2160 PNG）+ `.w960/.w1280/.w1920/.w2560.webp` 变体；所有项目的最后一页共用这一张 |
 | `assets/resume/` | 「关于我」弹窗里的简历 PDF：`tangyubao-resume-2026.pdf`（原文件 `唐尉保-UI设计师-个人简历2026.pdf`，735 KB，单页）；下载按钮带 `download="唐尉保-UI设计师-个人简历2026.pdf"`，浏览器保存时用中文文件名 |
@@ -73,7 +73,7 @@
 
 - 小号说明文字对比度必须 ≥ 4.5:1（`#8a929e`、`#7d8794`、`#9aa3ae` 等已按此校准，改色需复测）。
 - 程序化聚焦标题（`h1[tabindex="-1"]`）不显示焦点框；按钮/链接保留 `:focus-visible` 描边。
-- 手写体黄色年份「2016~2026」：`calc(clamp(12px, .95vw, 16px) + 9px)`（手机 `clamp(12px, 4.1vw, 16px)`、横屏 13px）。
+- 手写体黄色年份「2016~2026」：`calc(clamp(12px, .95vw, 16px) + 9px)`（手机 `clamp(12px, 4.1vw, 16px)`、横屏 13px）。字体为子集后的 `caveat-600.woff2`（2.5KB，只含 0–9 与 `~`）；这段文案若增加其它字符（如 `年`、`至今`），需要从 `caveat-600.source.woff2` 重新子集，否则这些字会落到 Kalam / 系统手写体回退。
 - 品牌字（左上「TANG」）与首页大标题（`#home-title` 两行：**Project Design** / **Portfolio** + 黄色手写年份「2016~2026」；已去掉原先的「Resume &」）当前使用 **Arial 600**：`Arial, "Helvetica Neue", Helvetica, sans-serif`，`font-weight: 600`（Arial 只有 Regular/Bold 两个字重，600 实际会用到 Bold 字形；想真正介于两者之间需换 Helvetica Neue Medium / Inter 等有 500–600 字重的字体）。
 - 大标题字号随宽度缩放，保证两行「Project Design / Portfolio」**各自单行**、年份「2016~2026」不压住右侧个人信息：桌面 `clamp(26px, 3.4vw, 64px)`，手机 `clamp(14.8px, 4.6vw, 21px)`，横屏 24px。
 
@@ -107,6 +107,7 @@
 - 缩略图导航动效：进入预览时缩略图栏从右侧（竖屏从底部）滑入，退出时向同侧滑出；首页卡片进入时在图片落位后再滑入。
 - 缩略图居中：翻页/滚轮时用 160ms 防抖 + 自定义 `scrollTo`，连续翻页或大图加载中不追帧，停止后再平滑居中一次；禁止每次 `showSlide` 直接 `scrollIntoView({behavior:"smooth"})`，否则会出现上下跳。
 - 缩略图数量少于 15 张且能在轨道内完整容纳时，右侧纵向轨道上下居中、竖屏底部横排左右居中（`is-short-list`）；放不下时仍从顶部/左侧开始滚动。
+- **缩略图资源（2026-11-16）**：`assets/slide-thumbs/` 统一为 WebP（q90，320×180 基线）并额外生成 `*.w240.webp`（q88，240×135）；`<img>` 使用 `srcset` 240/320 + `sizes="120px"` —— 桌面 2× 屏选 240（约 5KB/张），手机 3× 屏选 320；同时 `loading=lazy`、`decoding=async`、`fetchpriority=low`，打开预览时不再与大图抢带宽。
 - **页面链接热区**：页面可带 `links: [{ x, y, w, h, href, label }]`（百分比坐标），渲染为作品框内的透明 `<a target="_blank">`；悬停/聚焦显示浅色高亮，点击新窗口打开。翻页/层切换开始时清空、交接完成后重建；全屏下同样可点，且不会触发全屏翻页。详见 §3.11。
 - 最后一页其他项目：**只在真正的最后一页（封底页）出现**；底部滑出「其他项目」面板（隐藏时 `visibility: hidden` 且被舞台裁剪，平时不占布局、不影响大图尺寸），按经历顺序（抖音 → 京东零售 → 金山办公）列出其他可预览项目；卡片从下往上逐个出现（index² 抛物线延迟）；点击用「缩略图 → 大图」克隆层过渡切换到该项目第 1 页；全屏下隐藏；滚轮在面板上横向滚动、不触发翻页。
 - 最后一页避让：面板展开时必须为它预留高度——`sizeArtworkFrame()` 用 `otherProjectsReserve()`（`panel.offsetHeight + 14px`）压缩大图可用高度，并按居中公式把 `.artwork-stack` 上移（CSS 变量 `--stack-shift`），保证「大图 + 全屏按钮」整体落在面板上方（按钮距面板 14px）；与面板 550ms 同时动画（`.is-panel-adjusting` 期间给 `.artwork-frame` 加宽高过渡，栈位移本身有过渡）。**面板状态与翻页同时切换**：进入/离开末页时，面板滑入/滑出、作品框宽高过渡（550ms）与栈上移/复位都在翻页开始那一帧一起启动，形成一段连续运动；不再等翻页结束后再缩框，否则封底页落位后会再缩一次、看起来卡顿。`prefers-reduced-motion` 下关闭这些过渡。离开末页/进全屏时 reserve 归零并复位位移。短屏（`max-height: 520px`）面板同时压缩卡片与内边距，避免把大图挤得过小。
@@ -184,14 +185,15 @@
 - **原图母版不动**：`assets/works/bytedance/*` 保留原始 3840×2160 PNG（以及 JD/金山历史 4K PNG），任何优化都不覆盖母版。
 - **派生变体**：每页生成 `w960 / w1280 / w1920 / w2560` 四档 WebP（q95，视觉近无损），放在原图同目录；JD/金山页在 `唐尉保作品集2_files/` 下同样生成。
 - **运行时选择**：`pickSlideSource()` 计算「作品框 CSS 宽度 × min(devicePixelRatio, 2)」，选最小够用的变体。**超过最大变体时不再直接回退原 PNG**：目标 ≤ 2560×1.3 就用 2560 变体（例如 1440@2x 全屏要 2880，用 2560 上采样 12% 肉眼无感，但省掉数百 KB～数 MB 的 4K 母版）；只有真正超过 3328 的 4K 全屏才用原图。
-- **预加载**：可见页**优先**——`showSlide` 只加载当前页；等当前页 `decode()` 完成（初始进入在 `markArtworkReady`、翻页在动画启动前）再 `warmViewerNeighbors()` 预热**后 2 页 + 前 1 页**，翻页动画的 640ms 就是下一张的前置时间。`warmSlideImage()` 预热后立即 `decode()` 并用 LRU(4) 保住已解码位图，翻页时直接命中；慢网络下先保证「正在看的这张」不和大图预取抢带宽。
+- **预加载**：可见页**优先**——`showSlide` 只加载当前页；等当前页 `decode()` 完成（初始进入在 `markArtworkReady`、翻页在动画启动前）再 `warmViewerNeighbors()` 预热相邻页。**初始进入**先预热前后各 1 页，后 2 页延后 900ms（避免和首图/升级图抢带宽）；**翻页**时一次预热后 2 + 前 1（保证连续翻页不出现 loading）。`warmSlideImage()` 预热后立即 `decode()` 并用 LRU(4) 保住已解码位图。
+- **预览首开渐进加载（2026-11-16）**：首次进入查看器时 `placeArtwork` 先解码 **`w1280` 变体**（体积约为 2560 变体的 1/3），随后 `refreshArtworkResolution()` 在后台把当前页升级为 2560 变体；**最终显示的仍是与之前完全相同的 2560 位图，画质不降**，只是首屏出现更快。首页卡片悬停预取会同时预热 1280（首开用）与 2560（升级用）两个 URL。
 - **全屏/窗口变化**：`refreshArtworkResolution()` 在 resize、进入/退出全屏、图片加载完成后重新选档；尺寸变大升级、变小降级，不重复请求同一 URL。
 - **渐进占位**：首次进入/直接加载时用 320×180 轨道缩略图作为 `.artwork-frame` 背景（`setArtworkPlaceholder`），大图就绪后清除，避免白屏；**翻页过程中不再改占位背景**，避免额外重绘。
 - **占位不能平铺**：占位缩略图必须 `background-size: cover` + `background-repeat: no-repeat` + `background-position: center`；后面的 `.artwork-frame` 简写会把它们重置，需在 CSS 末尾再次声明（并在 JS 内联设置），否则硬刷新时 320×180 缩略图会平铺成“一屏很多图片”。
 - **翻页不闪屏**：翻页期间不得把当前图层压暗（旧实现加 `.is-loading` 会把图降到 15% 不透明度）；必须等实际 `<img>` 的 `decode()` 完成后再启动位移动画，且新图在动画开始前已放到画面外，慢解码时旧图保持完整可见。
 - **加载遮罩（loading veil，2026-11-16）**：大图未就绪时 `.image-loader` 覆盖作品框，用 `backdrop-filter: blur(22px)` + `rgba(9,12,17,.24)` 把下方的占位缩略图/上一页整体虚化，中央叠一枚半透明黑色玻璃圆底 + 白色 spinner（与视频播放按钮同一套玻璃语言，浅色/深色页都清楚）。**出现在加载超过 220ms 之后**（`ARTWORK_LOADER_DELAY`，快缓存翻页不闪现），一旦出现至少保持 300ms（`ARTWORK_LOADER_MIN_VISIBLE`，避免阈值附近只闪一下）；大图 `decode()` 完成后淡出 0.32s，且必须在 decode 之后才移除。切页/退出查看器用 `clearArtworkLoading()` 立即收掉，不把模糊带进转场。`.image-loader` 的 z-index 为 4（links 3 / canvas 2 / 工具栏 7）。
 - **缓存**：变体与原图同目录、同 URL 规则；替换图片时保留同名变体或重新生成，避免旧缓存。
-- **2026 图库单页更新**：设计稿在 `2026 作品材料/作品网站图库/` 下按项目分目录维护（iCloud，16:9，5760×3240 JPEG，文件名即图库页号）。替换时取对应页 → 转 3840×2160 PNG 母版（沿用 `<原页号>.png` 命名）→ 重生成 960/1280/1920/2560 WebP q95 变体与 320×180 JPEG 缩略图；只动该页，其余页不重导。站内页号会因合并页整体前移，图库页号 → 站内页号的当前映射见 §3.10「当前使用」（例：图库 `21.jpg` 现为站内第 11 页）。
+- **2026 图库单页更新**：设计稿在 `2026 作品材料/作品网站图库/` 下按项目分目录维护（iCloud，16:9，5760×3240 JPEG，文件名即图库页号）。替换时取对应页 → 转 3840×2160 PNG 母版（沿用 `<原页号>.png` 命名）→ 重生成 960/1280/1920/2560 WebP q95 变体与 320×180 / 240×135 WebP 缩略图；只动该页，其余页不重导。站内页号会因合并页整体前移，图库页号 → 站内页号的当前映射见 §3.10「当前使用」（例：图库 `21.jpg` 现为站内第 11 页）。
 - **深链/硬刷新首屏**：`<html class="is-booting">` + 内联 CSS 先隐藏所有 `[data-screen]`，等 `handleRoute()` 完成后再移除；初次渲染的 inactive 屏幕立即 `hidden`，避免刷新查看器时先绘制首页卡片网格。
 
 ### 3.10 滚动叠加页（stack）
@@ -213,7 +215,7 @@
 
 ### 3.12 结尾封底页（back cover）
 
-- **形态**：每个项目的最后一页改成「作品封面」文件夹里的设计稿封底 `封底.jpg`（5760×3240）：深色 THANKS 页，「唐尉保 · UI/UE DESIGNER」与 `TEL：189113300923 ｜ E-MAIL：834316142@qq.com` 已印刷在图片里。站内导入为 3840×2160 PNG 母版 `assets/works/back-cover.png` + `.w960/.w1280/.w1920/.w2560.webp`（q95）+ 320×180 缩略图 `assets/slide-thumbs/back-cover.jpg`，六个项目共用同一张。
+- **形态**：每个项目的最后一页改成「作品封面」文件夹里的设计稿封底 `封底.jpg`（5760×3240）：深色 THANKS 页，「唐尉保 · UI/UE DESIGNER」与 `TEL：189113300923 ｜ E-MAIL：834316142@qq.com` 已印刷在图片里。站内导入为 3840×2160 PNG 母版 `assets/works/back-cover.png` + `.w960/.w1280/.w1920/.w2560.webp`（q95）+ 320×180 缩略图 `assets/slide-thumbs/back-cover.webp`，六个项目共用同一张。
 - **注入方式**：`script.js` 在「封面即第 1 页」归一化之后给每个有 slides 的项目 `push` 一份 `BACK_COVER_SLIDE`（`closing: true`），因此它永远是最后一页；项目卡片上的「N PAGES」用 `contentPageCount()` 排除 `closing` 页（如抖音创作服务平台仍是 24），查看器页码包含它（25 / 25）。
 - **查看器接入**：这是一张普通图片页，没有任何特殊分支——预加载、响应式选档、640ms 上/下滑动、缩略图、全屏、`links` 热区全部沿用已有逻辑，进入/离开封底的转场与其它页完全一致。
 - **联系方式**：图片上的 TEL / E-MAIL 用 `links` 百分比热区叠成真实链接（`tel:+8618911300923` / `mailto:834316142@qq.com`），点击不翻页，全屏下也可点。
@@ -259,13 +261,13 @@
 - 抖音创作服务平台已把图库 7–11、13–16、17–20、25–26 页分别合并为叠层页（站内第 7 / 9 / 10 / 15 页，层间原位渐隐渐现、每次进入从首层开始、缩略图取最终层），项目总页数 35 → 24；其余页按 §3.10 的映射顺延。
 - 金山词霸已按 `作品网站图库/金山办公/` 更新为 10 页：C端 30 / 31 / 32 / 33 / 34 / 35 / 37 / 38 / 40 / 41；旧 C端 36 / 39 / 43 不再进入数据，旧资源仍保留在 `唐尉保作品集2_files/`。
 - 页内图片左下角的 `TANG WEI BAO` 水印是设计稿导出时烧进图片的（设计稿里就是这个名字）；站内可见文案已统一为 `TANG YUBAO`（页脚），如需图片水印也同步，需要重新导出设计稿后再入库。
-- `assets/demo/ppt-demo.png` + `assets/slide-thumbs/demo-01.jpg` 保留为 `.qa/media/compose.html` 的默认测试素材，不在站点里引用。
+- `assets/demo/ppt-demo.png` + `assets/slide-thumbs/demo-01.webp` 保留为 `.qa/media/compose.html` 的默认测试素材，不在站点里引用。
 - 占位项目（抖音分成 / 抖音精选 / 黄金眼 / 小米邮箱 / WPS Office）已从数据里移除；`disabled` 兜底与未知项目回退逻辑保留，`#project/douyin/douyin-revenue` 现在回退到该项目导航页。
 - PNG 图层已在代码与编辑器里跑通，但**还没接过真实的分层 PPT**；真实 `.pptx` 到手后先用 `.qa/media/pptx2layers.py` 对一遍坐标再入库。
 - 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）；`0002_geo` 迁移已应用，D1 增加 `region/city/continent` 列（由 Cloudflare 边缘写入，不存 IP）。
 - 看板令牌不写入仓库，本机保存在 `analytics/local/.data/dashboard-token.txt`（已 gitignore）；本地 `file://` / `localhost` 预览默认不上报，需显式加 `?analytics_endpoint=…`（或 `?analytics_force=1`）才会走线上 collector。
 - `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
-- 首屏图片已改为响应式：封面 640/960/1280/1920/2560 WebP `srcset` + 首图 preload，4G 限速下桌面首页图片约 0.31MB（原 ~2.9MB）、LCP ~2.8s（原 ~15.7s）。后续可继续：① 变体改 AVIF（再省 25–35%）；② 预览缩略图转 WebP（当前单项目约 0.12MB）；③ 预览第 1 页 2560 WebP 约 0.27MB，可评估首开先显示 1280 再后台升档；④ 国内访问可把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余大头）。详见 `analytics/体验分析报告.md`。
+- 首屏图片已响应式（封面 640/960/1280/1920/2560 WebP `srcset` + 首图 preload）；Caveat 手写体已子集化（51KB → 2.5KB）；预览缩略图已 WebP + 240/320 `srcset`；预览首开先 1280 再后台升级 2560（最终画质不变）。剩余可继续：① 变体改 AVIF（再省 25–35%）；② 国内访问把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余最大变量）；③ Service Worker 预缓存首屏资源，改善复访。详见 `analytics/体验分析报告.md`。
 - 埋点口径的已知局限（下载点击≠保存成功、DNT 不上报、无跨设备、会话 30 分钟上限、封底页计入总页数等）集中写在 `analytics/体验分析报告.md §7`，对外解释数据时以此为准。
 
 ## 6. 变更记录（主题合并）
@@ -282,7 +284,7 @@
 - 站点可见品牌文案统一为 `TANG YUBAO`（页脚）；页内图片左下角水印仍是设计稿烧进的 `TANG WEI BAO`，如需一致要重导设计稿（见 §5）。
 - 开场 6 页按「封面 → 宏观背景 → 现阶段问题 → 创作路径洞察 → 作者生命周期 → 三大方向」排布，对应图库页序 **1、2、5、3、6、4**；三大方向（图库 4）紧邻 STEP 1–3 章节，便于后续案例承接。
 - 抖音四个项目与金山词霸使用独立封面图（`assets/thumbs/douyin-*.jpg` / `mobile.jpg`，由 2026 图库封面设计稿压到 3200×1800 JPEG q84）；JD 由 `唐尉保作品集2_files/图片1.png` 导出同规格封面。**当前封面同时作为各项目作品第 1 页**，首页与项目页共用同一封面。
-- **2026-11-16**：抖音创作服务平台封面改用图库最新设计稿（`2026 作品材料/作品网站图库/01 作品封面/抖音创作服务平台.jpg`，5760×3240），重新导出 `assets/thumbs/douyin-platform.jpg`（3200×1800 q84）与四档 WebP 变体，并同步重出 320×180 缩略图 `assets/slide-thumbs/byte-platform-01.jpg`；首页卡、项目卡、查看器第 1 页与第一张缩略图一起更新。
+- **2026-11-16**：抖音创作服务平台封面改用图库最新设计稿（`2026 作品材料/作品网站图库/01 作品封面/抖音创作服务平台.jpg`，5760×3240），重新导出 `assets/thumbs/douyin-platform.jpg`（3200×1800 q84）与四档 WebP 变体，并同步重出 320×180 缩略图 `assets/slide-thumbs/byte-platform-01.webp`；首页卡、项目卡、查看器第 1 页与第一张缩略图一起更新。
 - **2026-11-14**：第一段经历的品牌文案由「字节跳动」改回「抖音」，图标由 `assets/marks/bytedance.webp` 换成 `assets/marks/douyin.webp`（首页经历组与项目页共用同一 logo 字段）；路由 ID `douyin`、项目名、素材目录 `assets/works/bytedance/` 均不变。
 - **2026-11-13**：金山词霸按 `2026 作品材料/作品网站图库/金山办公/` 更新为 10 页（C端 30 / 31 / 32 / 33 / 34 / 35 / 37 / 38 / 40 / 41）；图库中已不存在的 C端 36 / 39 / 43 从数据移除，母版、四档 WebP 变体与 320×180 缩略图同步重生成。
 - **2026-11-12**：抖音创作服务平台图库第 21 页（当前站内第 11 页）换为修正后的数据页——默认视图作者占比 27% → 71%，自定义视图改为「作者占比 6%」，中间条改为「首页访问留存均值 +5.62% / 作者占比 23%」，母版、四档 WebP 变体与缩略图同步重生成。原因是设计稿修正了该页实验数据。
@@ -333,6 +335,7 @@
 - **2026-11-16（图片加载优化）**：4G 限速（1.6Mbps / 150ms / CPU 4×）实测首页图片 **2914KB → 311KB**、FCP 2588→1156ms、LCP 15684→2780ms；移动 390@3x 首页图片 386KB、LCP 1716ms。做法：封面 `srcset`（新增 w640，按卡片宽度选档）+ 首图 preload/fetchpriority、首页卡片悬停预取第 1 页、全屏改为 2560 变体不回退 4K PNG（省 ~0.67MB/张）、预览先加载可见页再预热相邻页（打开预览 4315→2362ms，连续翻页 loading 0 次）。
 - **2026-11-16（视频声音与图片防盗）**：修掉「个人AI转型实践第 6 页声音要点两次以上」——控制条 2.6s 自动隐藏后，第一次点击落在隐藏控制条的底部区域会被当成点画面而**暂停视频**，用户需要再点静音、再点播放；现在带音轨且静音的视频控制条常显、取消静音在同一手势里补 `play()`，控制条隐藏时点击底部区域只唤出控制条不暂停。同时加图片防盗：拦截图片/作品框/卡片/缩略图的右键菜单与拖拽、iOS 长按 callout，全屏右键翻页不受影响。
 - **2026-11-16（触控板翻页）**：修掉 Mac 触控板一次滑动会连续翻多页——原来每个 wheel 事件累计到 24px 且间隔 230ms 就翻页，触控板的惯性流每帧都在触发；现在翻页后忽略同一串惯性事件（事件间隔 <60ms）并等 640ms 动画，停顿 60ms 以上才重新计数，鼠标滚轮有间隔的档位不受影响；叠层页一次手势只走一层。
+- **2026-11-16（加载体验优化第二轮）**：① Caveat 手写体子集化（51KB → **2.5KB**，只含 `0-9~`，渲染像素 diff 为 0，母版保留为 `caveat-600.source.woff2`）；② 预览缩略图从 JPEG 换 WebP 并增加 `*.w240.webp` 变体（`srcset` 240/320 + `sizes=120px` + `fetchpriority=low`，桌面缩略图单张约 5KB）；③ 预览首开渐进加载：先解码 `w1280` 再后台升级 `w2560`（最终仍显示 2560，画质不变），首页悬停预取同时预热两个变体，并把初始进入的「后 2 页」预取延后 900ms。4G 限速本地复测：预览打开 2.26s → **1.72s**（−24%），首次可见即 w1280、随后升级为 w2560；连续翻页 loading 遮罩仍为 0；全部 6 个项目缩略图请求均命中 WebP w240、无 404、无 JS 报错。
 ### 6.5 复合媒体页基线
 
 - 查看器支持普通图片页与 `type: "composite"` 复合页共存；复合页由 16:9 背景、百分比定位的视频框和 PNG 图层组成，旧图片数据无需迁移。
