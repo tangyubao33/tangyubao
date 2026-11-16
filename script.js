@@ -754,53 +754,91 @@ function setLastSlide(active) {
   sizeArtworkFrame();
 }
 
-const contactToggle = document.querySelector("[data-contact-toggle]");
+const contactToggles = [...document.querySelectorAll("[data-contact-toggle]")];
 const contactCard = document.querySelector("[data-contact-card]");
 const contactBackdrop = document.querySelector("[data-contact-backdrop]");
+const aboutCols = [...(contactCard?.querySelectorAll(".about-col") || [])];
+let contactTrigger = null;
 
 function contactFocusable() {
   return [...contactCard.querySelectorAll("a, button")].filter((element) => element.offsetParent !== null);
 }
 
+/* Overlay scrollbar: the native bar is hidden in CSS so this thin thumb can fade
+   in with a transition when the pointer enters the dialog. */
+function updateAboutScrollbar(col) {
+  const view = col.querySelector(".about-side, .about-main");
+  const bar = col.querySelector(".about-scrollbar");
+  const thumb = bar?.firstElementChild;
+  if (!view || !bar || !thumb) return;
+  const max = view.scrollHeight - view.clientHeight;
+  const scrollable = max > 2;
+  col.dataset.scrollable = String(scrollable);
+  if (!scrollable) {
+    thumb.style.height = "0px";
+    return;
+  }
+  const track = Math.max(0, view.clientHeight - 24);
+  const thumbHeight = Math.min(track, Math.max(28, Math.round(track * (view.clientHeight / view.scrollHeight))));
+  const offset = Math.round((view.scrollTop / max) * Math.max(0, track - thumbHeight));
+  thumb.style.height = `${thumbHeight}px`;
+  thumb.style.transform = `translateY(${offset}px)`;
+}
+
+function updateAboutScrollbars() {
+  aboutCols.forEach(updateAboutScrollbar);
+}
+
+aboutCols.forEach((col) => {
+  col.querySelector(".about-side, .about-main")?.addEventListener("scroll", () => updateAboutScrollbar(col), { passive: true });
+});
+
 function setContactCard(open, restoreFocus = false) {
-  if (!contactToggle || !contactCard) return;
+  if (!contactToggles.length || !contactCard) return;
   const isOpen = contactCard.classList.contains("is-open");
   if (open === isOpen) return;
   contactCard.classList.toggle("is-open", open);
   contactBackdrop?.classList.toggle("is-open", open);
   document.body.classList.toggle("is-about-open", open);
-  contactToggle.setAttribute("aria-expanded", String(open));
+  contactToggles.forEach((element) => element.setAttribute("aria-expanded", String(open)));
   if (open) {
     // the card fades in from visibility:hidden, so focus has to wait for the
     // next task or the browser refuses it
     window.setTimeout(() => contactFocusable()[0]?.focus({ preventScroll: true }), 0);
+    updateAboutScrollbars();
+    window.setTimeout(updateAboutScrollbars, 460);
   } else if (restoreFocus) {
-    contactToggle.focus({ preventScroll: true });
+    (contactTrigger || contactToggles[0]).focus({ preventScroll: true });
   }
 }
 
-contactToggle.addEventListener("click", () => {
-  setContactCard(!contactCard.classList.contains("is-open"));
+contactToggles.forEach((element) => {
+  element.addEventListener("click", () => {
+    contactTrigger = element;
+    setContactCard(!contactCard.classList.contains("is-open"));
+  });
 });
 
 contactCard.addEventListener("click", (event) => {
   if (event.target.closest("[data-contact-close]")) setContactCard(false, true);
 });
 
-// 主要职责 can be folded away: the JD entry starts collapsed, Douyin starts open
+// 主要职责 / 能力亮点 fold away; JD and the ability highlights start collapsed
 contactCard.addEventListener("click", (event) => {
-  const toggle = event.target.closest?.("[data-duties-toggle]");
+  const toggle = event.target.closest?.("[data-fold-toggle]");
   if (!toggle) return;
-  const wrap = toggle.closest("[data-duties]");
+  const wrap = toggle.closest("[data-fold]");
   if (!wrap) return;
   const open = !wrap.classList.contains("is-open");
   wrap.classList.toggle("is-open", open);
   toggle.setAttribute("aria-expanded", String(open));
-  const list = wrap.querySelector(".about-duties");
-  if (list) {
-    list.toggleAttribute("inert", !open);
-    list.setAttribute("aria-hidden", String(!open));
+  const panel = wrap.querySelector(".about-fold-panel");
+  if (panel) {
+    panel.toggleAttribute("inert", !open);
+    panel.setAttribute("aria-hidden", String(!open));
   }
+  updateAboutScrollbars();
+  window.setTimeout(updateAboutScrollbars, 420);
 });
 
 contactCard.addEventListener("keydown", (event) => {
@@ -820,9 +858,15 @@ contactCard.addEventListener("keydown", (event) => {
 
 document.addEventListener("click", (event) => {
   if (!contactCard.classList.contains("is-open")) return;
-  if (contactCard.contains(event.target) || contactToggle.contains(event.target)) return;
+  if (contactCard.contains(event.target)) return;
+  if (contactToggles.some((element) => element.contains(event.target))) return;
   setContactCard(false);
 });
+
+window.addEventListener("resize", () => {
+  if (contactCard.classList.contains("is-open")) updateAboutScrollbars();
+});
+
 const currentProject = () => currentExperience()?.projects.find((project) => project.id === state.projectId);
 
 function renderTimeline() {

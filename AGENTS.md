@@ -83,10 +83,10 @@
 - 路由：`#home` / `#experience/<experienceId>` / `#project/<experienceId>/<projectId>`。
 - **无效或禁用路由必须回退**（禁用项目 → 该经历的项目导航页；未知路由 → 首页），并用 `replaceState` 把地址栏规范化，不允许「地址栏与画面不一致」。
 - 屏幕切换后焦点移到新屏幕标题（仅在首次渲染完成后生效）。
-- **「关于我」弹窗（2026-11-16 改）**：顶栏右侧按钮文案为「关于我」（原「联系」），点开是**居中**的两栏弹窗（`.contact-card`，1080px / 92vw 宽，最高 `min(880px, 100vh - 88px)`）：
-  - **左栏**：左上角是 `ABOUT` 小标 + 「关于我」标题（**左对齐**，标题底边距头像 **40px**：`calc(40px - var(--about-side-gap))`，因为左栏是 `gap: 9px` 的 flex 列）；下面是头像、姓名、UI/UX DESIGNER、学历/现职说明、经验/方向/现职三行、TEL/微信 + E-MAIL，**最底部是「下载 PDF 简历」按钮**（`assets/resume/tangyubao-resume-2026.pdf`，带 `download` 属性、显示 735 KB）。
-  - **右栏**：自我介绍 4 段 + 项目经历三段（金山办公 / 京东零售 / 抖音，含起止时间、职位、业务描述）；后两段带**可折叠的「主要职责」**（`data-duties` 包裹：`.about-duties-toggle` 按钮 + `grid-template-rows: 0fr→1fr` 动画，`aria-expanded` / `inert` / `aria-hidden` 同步；**京东默认折叠**，抖音默认展开）。
-  - 两栏都可内部滚动，但**滚动条默认隐藏**（`scrollbar-width: thin` + 透明 thumb，WebKit 用 `::-webkit-scrollbar-thumb` 透明），**鼠标进入弹窗才显示**（`.contact-card:hover` / `:focus-within` 时把 thumb 变亮），并用 `scrollbar-gutter: stable` 防止出现滚动条时内容跳动。
+- **「关于我」弹窗（2026-11-16 改）**：顶栏右侧按钮文案为「关于我」（原「联系」），图标默认旋转 180°（`↗` → 指向左下），打开后转回 0°（指向右上），0.3s 过渡；**首页右上角个人信息（姓名 + 头像）也是第二个触发点**（`button.profile-top[data-contact-toggle]`，hover 只改 `cursor:pointer`，不加任何视觉反馈，focus-visible 有描边）。点开是**居中**的两栏弹窗（`.contact-card`，1080px / 92vw 宽，最高 `min(880px, 100vh - 88px)`）：
+  - **左栏**：左上角是 `ABOUT` 小标 + 「关于我」标题（**左对齐**，标题底边距头像 **40px**：`calc(40px - var(--about-side-gap))`，因为左栏是 `gap: 9px` 的 flex 列）；下面是头像、姓名、UI/UX DESIGNER、学历/现职说明、**经验 / 方向 / 现职 / 状态四行**（状态 = 「在职 · 寻找新机会」）、TEL/微信 + E-MAIL，**最底部是「下载 PDF 简历」按钮**（`assets/resume/tangyubao-resume-2026.pdf`，带 `download` 属性、显示 735 KB）。
+  - **右栏**：自我介绍（首段常显）+ **可折叠的「能力亮点 3 项」** + 项目经历三段（金山办公 / 京东零售 / 抖音，含起止时间、职位、业务描述）；后两段带**可折叠的「主要职责 4 项」**。折叠统一用 `data-fold` 组件：`.about-fold-toggle` 按钮（`aria-expanded`）+ `.about-fold-panel`（`grid-template-rows: 0fr→1fr` 动画，`inert` / `aria-hidden` 同步，箭头旋转；面板本身挂 `inert`，不要挂在内层列表上）。默认状态：**能力亮点折叠、京东职责折叠、抖音职责展开**。
+  - 两栏都可内部滚动，但**原生滚动条隐藏**（`scrollbar-width: none` + `::-webkit-scrollbar { width:0 }`），改用**自绘 overlay 滚动条**：每列外层 `.about-col`（`position:relative`）+ `.about-scrollbar > i` 细条，按 `scrollHeight/clientHeight/scrollTop` 逐帧算高度与位移；**默认 opacity 0，鼠标进入弹窗（`.contact-card:hover .about-col[data-scrollable="true"]`）时 0.32s 淡入**——原生滚动条做不出过渡，只能自绘；内容没超出时 `data-scrollable="false"`、不显示。
   - 背后有 `.contact-backdrop` 模糊遮罩，`aria-modal="true"`、焦点进入弹窗并可 Tab 循环、Esc 关闭并还原到按钮、点遮罩关闭、打开时 `body.is-about-open` 锁滚动；`≤860px` 自动改成单栏（标题占满一行、个人信息横排、简介与经历在下方滚动）。弹窗在 home / viewer 都可用。
 - 查看器：滚轮/上下键/PageUp/PageDown 翻页；缩略图 `listbox` + roving tabindex（只有当前项可 Tab）；Ctrl/⌘+滚轮放行浏览器缩放。
 - 查看器信息条：从左到右「返回（< 箭头）→ 浅色分割线 → 项目名 → 公司·时间段 → 当前页/总页数」，三处文字统一 14px；查看器状态下导航栏隐藏 TEL/E-MAIL（保留「关于我」入口），作品区不再有独立信息行。
@@ -295,6 +295,7 @@
 - PNG 图层与视频共用百分比坐标体系，支持层级、透明度、适配方式和等比圆角；分层 PPT 应先用现有编辑器或坐标转换工具校验后再入库。
 - 「个人AI转型实践」第 6 页继续使用复合页实现；视频已替换为带 AAC 音轨的 `ai-practice-demo.mp4`，默认静音播放，点击后提示可取消静音，取消后正常出声。
 - **2026-11-15**：抖音AI封面第 6 页视频框按 PPT 手机边框内沿重测（`x 8.91 / y 30.68 / w 18.59`、内圆角 1.06）并加 `objectPosition:"top"`；重出 `06-preview.jpg`、四档 WebP 变体与 320×180 缩略图。原因是录屏（592×1280）比框更窄，默认居中 `cover` 会把顶部状态栏裁到边框外，视觉上「视频没对齐顶部边框」。
+- **2026-11-16（补2）**：「关于我」弹窗继续打磨——原生滚动条换成自绘 overlay 细条，鼠标进入弹窗才 0.32s 淡入（原生条无法做过渡）；自我介绍的三条能力亮点也做成折叠（默认收起）；左栏「现职」下新增「状态：在职 · 寻找新机会」；顶栏箭头默认指向左下、打开后指向右上；首页右上角姓名 + 头像成为第二个触发点，hover 只改指针。
 - **2026-11-16（补）**：「关于我」弹窗按反馈调整——「关于我」标题移到左栏左上角、左对齐、距头像 40px；左栏底部加「下载 PDF 简历」按钮（`assets/resume/tangyubao-resume-2026.pdf`，download 属性）；项目经历的主要职责改可折叠（京东默认收起、抖音默认展开，`grid-template-rows` 动画）；两栏滚动条默认隐藏、鼠标进弹窗才显示，并加 `scrollbar-gutter: stable` 防跳动。
 - **2026-11-16**：顶栏「联系」改为「关于我」，原居右小名片改成**居中两栏弹窗**：左边个人信息与联系方式，右边自我介绍 + 项目经历（金山办公 / 京东零售 / 抖音三段，含职位、业务描述与主要职责 01–04，内容按简历截图录入）；右栏可内部滚动，窄屏变单栏，Esc / 点遮罩关闭。
 - **2026-11-15**：声音提示只保留在「个人AI转型实践」第 6 页（唯一带音轨的录屏）；抖音 5 条无声录屏标 `silent: true`，控制条不再显示静音按钮、也不再弹气泡。气泡改为直接量静音按钮矩形定位，尾巴中心与按钮中心严格重合（1440 实测 1019.6 = 1019.6）。另外 `index.html` 的 `script.js`/`styles.css` 加了 `?v=` 版本号，避免浏览器缓存继续跑旧版本。

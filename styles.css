@@ -88,8 +88,10 @@ button:focus-visible, a:focus-visible { outline: 2px solid #2f7ff7; outline-offs
 
 .contact-link { justify-self: end; display: flex; align-items: center; gap: 11px; padding: 0; border: 0; color: #aeb5bf; background: none; font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
 .contact-link i { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #090b0f; background: #f3f5f7; font-style: normal; transition: transform .25s var(--ease); }
-.contact-link:hover i { transform: translate(2px, -2px); }
-.contact-link[aria-expanded="true"] i { transform: rotate(45deg); }
+.contact-link i { transform: rotate(180deg); transition: transform .3s var(--ease); }
+.contact-link:hover i { transform: translate(-2px, 2px) rotate(180deg); }
+.contact-link[aria-expanded="true"] i { transform: rotate(0deg); }
+.contact-link[aria-expanded="true"]:hover i { transform: translate(2px, -2px) rotate(0deg); }
 .header-contact { display: flex; align-items: center; justify-content: flex-end; gap: 9px; white-space: nowrap; }
 .header-contact i { color: #3f4650; font-style: normal; }
 .header-contact a { display: flex; align-items: baseline; gap: 7px; color: #a3abb5; font-size: 11px; letter-spacing: .05em; text-decoration: none; text-transform: uppercase; white-space: nowrap; transition: color .2s; }
@@ -130,12 +132,15 @@ body[data-screen="viewer"] .site-header { grid-template-columns: auto minmax(0, 
 .contact-card-close { position: absolute; z-index: 3; top: 14px; right: 14px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid rgba(255, 255, 255, .14); border-radius: 50%; color: #9aa3ad; background: rgba(10, 12, 15, .6); font-size: 14px; line-height: 1; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
 .contact-card-close:hover { color: #fff; border-color: rgba(255, 255, 255, .42); background: rgba(255, 255, 255, .08); }
 
-.about-side, .about-main { scrollbar-width: thin; scrollbar-color: transparent transparent; scrollbar-gutter: stable; }
-.about-side::-webkit-scrollbar, .about-main::-webkit-scrollbar { width: 8px; height: 8px; }
-.about-side::-webkit-scrollbar-track, .about-main::-webkit-scrollbar-track { background: transparent; }
-.about-side::-webkit-scrollbar-thumb, .about-main::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: transparent; background-clip: padding-box; }
-.contact-card:hover .about-side, .contact-card:hover .about-main { scrollbar-color: rgba(255, 255, 255, .28) transparent; }
-.contact-card:hover .about-side::-webkit-scrollbar-thumb, .contact-card:hover .about-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .26); background-clip: padding-box; }
+/* Columns scroll with the native scrollbar hidden; a thin overlay thumb fades
+   in (CSS opacity transition) when the pointer is inside the dialog, which the
+   native bar cannot do. */
+.about-col { position: relative; display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.about-side, .about-main { scrollbar-width: none; -ms-overflow-style: none; }
+.about-side::-webkit-scrollbar, .about-main::-webkit-scrollbar { width: 0; height: 0; }
+.about-scrollbar { position: absolute; z-index: 2; top: 12px; right: 4px; bottom: 12px; width: 3px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .32s var(--ease); }
+.about-scrollbar i { position: absolute; left: 0; top: 0; width: 100%; height: 36px; border-radius: 3px; background: rgba(255, 255, 255, .3); transform: translateY(0); }
+.contact-card:hover .about-col[data-scrollable="true"] > .about-scrollbar { opacity: 1; }
 
 .about-side { --about-side-gap: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--about-side-gap); padding: 34px 26px 26px; overflow-y: auto; overscroll-behavior: contain; border-right: 1px solid rgba(255, 255, 255, .09); background: linear-gradient(180deg, rgba(24, 29, 37, .72), rgba(13, 16, 20, .5)); }
 .contact-card-avatar { width: 74px; height: 74px; object-fit: cover; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .18); }
@@ -177,15 +182,18 @@ body[data-screen="viewer"] .site-header { grid-template-columns: auto minmax(0, 
 .about-job-company img { flex: 0 0 auto; width: 30px; height: 30px; object-fit: contain; border-radius: 7px; }
 .about-job-company h3 { margin: 0; color: #eef0eb; font-size: 13.5px; font-weight: 600; letter-spacing: .01em; }
 .about-job-line { margin: 6px 0 0 40px !important; color: #9aa3ae !important; font-size: 12px !important; line-height: 1.7 !important; }
-.about-duties-wrap { margin: 12px 0 0 40px; }
-.about-duties-toggle { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: #7d8794; font: inherit; font-size: 9px; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; transition: color .2s; }
-.about-duties-toggle:hover { color: #cfd4da; }
-.about-duties-toggle em { color: #6f7884; font-style: normal; font-size: 9px; letter-spacing: .06em; }
-.about-duties-toggle i { display: block; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg) translate(-1px, -1px); transition: transform .3s var(--ease); }
-.about-duties-wrap.is-open .about-duties-toggle i { transform: rotate(225deg) translate(-1px, -1px); }
-.about-duties-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .38s var(--ease); }
-.about-duties-wrap.is-open .about-duties-panel { grid-template-rows: 1fr; }
+.about-fold--duties { margin: 12px 0 0 40px; }
+.about-fold--intro { margin: 14px 0 0; }
+.about-fold-toggle { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: #7d8794; font: inherit; font-size: 9px; letter-spacing: .18em; text-transform: uppercase; cursor: pointer; transition: color .2s; }
+.about-fold-toggle:hover { color: #cfd4da; }
+.about-fold-toggle em { color: #6f7884; font-style: normal; font-size: 9px; letter-spacing: .06em; }
+.about-fold-toggle i { display: block; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg) translate(-1px, -1px); transition: transform .3s var(--ease); }
+.about-fold.is-open .about-fold-toggle i { transform: rotate(225deg) translate(-1px, -1px); }
+.about-fold-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .38s var(--ease); }
+.about-fold.is-open .about-fold-panel { grid-template-rows: 1fr; }
 .about-duties { display: grid; gap: 6px; min-height: 0; margin: 0; padding: 10px 0 0; overflow: hidden; list-style: none; }
+.about-highlights { display: grid; gap: 10px; min-height: 0; padding: 10px 0 0; overflow: hidden; }
+.about-highlights p { margin: 0 !important; }
 .about-duties li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: baseline; }
 .about-duties b { color: #f5c84b; font-family: "DIN Alternate", "Helvetica Neue", Arial, sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
 .about-duties span { color: #a7aeba; font-size: 12px; line-height: 1.75; }
@@ -201,7 +209,8 @@ body[data-screen="viewer"] .site-header { grid-template-columns: auto minmax(0, 
   .contact-card-links { margin-top: 4px; padding-top: 0; border-top: 0; display: flex; flex-wrap: wrap; gap: 2px 22px; }
   .contact-card-links a { padding: 2px 0; border-bottom: 0; }
   .about-main { padding: 20px 20px 24px; }
-  .about-job-line, .about-duties-wrap { margin-left: 0 !important; }
+  .about-job-line, .about-fold--duties { margin-left: 0 !important; }
+  .about-col--side { grid-template-rows: auto; }
   .about-side-head { flex: 0 0 100%; margin: 0 0 16px; }
   .about-main p { font-size: 12px; }
 }
@@ -235,7 +244,10 @@ body.is-about-open { overflow: hidden; }
 
 /* Personal profile block inside the home hero */
 .profile { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; text-align: left; }
-.profile-top { display: flex; align-items: stretch; gap: 14px; }
+.profile-top { display: flex; align-items: stretch; gap: 14px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.profile-top:hover, .profile-top:active { background: none; color: inherit; }
+.profile-top:focus-visible { outline: 2px solid rgba(245, 200, 75, .5); outline-offset: 5px; border-radius: 6px; }
+.profile-role { display: block; }
 .profile-avatar { width: 45px; height: 45px; flex: 0 0 auto; object-fit: cover; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .16); }
 .profile-info { display: grid; grid-template-rows: 1fr 1fr; align-items: center; justify-items: end; }
 .profile-name { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; margin: 0; color: #eef0ec; font-size: 15px; font-weight: 600; letter-spacing: .02em; line-height: 1.15; }
