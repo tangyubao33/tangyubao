@@ -299,25 +299,50 @@ function setCardExpandedCover(card, expanded) {
   window.clearTimeout(card._coverCollapseTimer);
   card.classList.remove("is-cover-collapsing");
   const sizes = `${Math.ceil(Math.max(metrics.width, metrics.height * COVER_ASPECT))}px`;
-  if (layer.dataset.cover !== metrics.cover) {
-    layer.dataset.cover = metrics.cover;
-    layer.sizes = sizes;
-    layer.srcset = coverSrcset(metrics.cover);
-    layer.src = `${coverBase(metrics.cover)}.w960.webp`;
-    if (!layer.dataset.wired) {
-      layer.dataset.wired = "1";
-      const reveal = () => {
+  const cover = metrics.cover;
+  const base = coverBase(cover);
+  if (!layer.dataset.wired) {
+    layer.dataset.wired = "1";
+    layer.addEventListener("load", () => {
+      if (!layer.classList.contains("is-cover-expanded")) {
         if (card.classList.contains("is-expanded") || card.matches(":focus-visible")) {
           card.classList.add("is-cover-expanded");
         }
-      };
-      layer.addEventListener("load", reveal);
-      layer.addEventListener("error", reveal);
-    }
-  } else if (layer.sizes !== sizes) {
-    layer.sizes = sizes;
+      }
+      // After the fast (w960) bitmap is on screen, upgrade to the sharp 16:9
+      // variant for the expanded width. Same crop/composition, no blank frame.
+      if (layer.dataset.sharp !== layer.dataset.cover) {
+        layer.dataset.sharp = layer.dataset.cover;
+        layer.sizes = layer.dataset.sizes;
+        layer.srcset = coverSrcset(layer.dataset.cover);
+      }
+    });
+    layer.addEventListener("error", () => {
+      if (card.classList.contains("is-expanded") || card.matches(":focus-visible")) {
+        card.classList.add("is-cover-expanded");
+      }
+    });
   }
-  if (layer.complete && layer.naturalWidth) card.classList.add("is-cover-expanded");
+  if (layer.dataset.cover !== cover) {
+    layer.dataset.cover = cover;
+    layer.dataset.sizes = sizes;
+    layer.dataset.sharp = "";
+    layer.removeAttribute("srcset");
+    layer.removeAttribute("sizes");
+    layer.src = `${base}.w960.webp`;
+  } else if (layer.dataset.sizes !== sizes) {
+    layer.dataset.sizes = sizes;
+    layer.sizes = sizes;
+    if (layer.dataset.sharp === cover) layer.srcset = coverSrcset(cover);
+  }
+  if (layer.complete && layer.naturalWidth) {
+    card.classList.add("is-cover-expanded");
+    if (layer.dataset.sharp !== cover) {
+      layer.dataset.sharp = cover;
+      layer.sizes = layer.dataset.sizes;
+      layer.srcset = coverSrcset(cover);
+    }
+  }
 }
 
 function preloadExpandedCover(card) {
