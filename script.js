@@ -64,11 +64,11 @@ const kingsoftSlides = kingsoftPages.map((number, index) => ({
    placement editor (.qa/media/compose.html).
 --------------------------------------------------------------------------- */
 const isComposite = (slide) => Boolean(slide && slide.type === "composite");
-// Closing page added to every project: it is a DOM-rendered page (no bitmap),
-// so it must be excluded from image preloading, placeholders and resolution
-// swapping, and it does not count towards the "N PAGES" shown on the cards.
-const isThank = (slide) => Boolean(slide && slide.type === "thank");
-const contentPageCount = (project) => (project?.slides || []).filter((slide) => !isThank(slide)).length;
+// Every project ends with the gallery back cover ("封底"). It is a normal image
+// slide, but it is a closing page rather than content, so it does not count
+// towards the "N PAGES" shown on the home / projects cards.
+const isClosing = (slide) => Boolean(slide && slide.closing);
+const contentPageCount = (project) => (project?.slides || []).filter((slide) => !isClosing(slide)).length;
 const slideSource = (slide) => (isComposite(slide) ? (slide.src || slide.background) : slide?.src);
 // High-res originals stay untouched; the viewer loads the smallest WebP that
 // still covers the frame at the current device pixel ratio. The original is
@@ -140,7 +140,6 @@ function refreshArtworkResolution() {
   if (elements.artwork.classList.contains("is-loading")) return;
   const project = currentProject();
   const slide = project?.slides?.[state.slideIndex];
-  if (isThank(slide)) return;
   const visual = activeVisualSlide(slide);
   if (!slide || !visual || !visual.variants?.length) return;
   const wanted = pickSlideSource(visual);
@@ -495,17 +494,26 @@ Object.values(experiences).forEach((experience) => {
   });
 });
 
-// Every project closes with the same THANK page (rendered by the DOM, not a
-// bitmap): the contact details are live mailto:/tel: links and stay crisp at
-// any size. It is appended after the cover setup above so it always lands last.
-const THANK_SLIDE = {
-  type: "thank",
-  alt: "感谢观看 · 唐尉保的联系方式"
+// Every project closes with the same gallery back cover (封底), a 16:9 bitmap
+// from the cover design folder. It is appended after the cover setup above so
+// it always lands last, and it is a normal image slide: page turns, thumbnails,
+// fullscreen and the "other projects" panel need no special casing.
+const BACK_COVER_SLIDE = {
+  closing: true,
+  src: "assets/works/back-cover.png",
+  variants: slideVariants("assets/works/back-cover.png"),
+  thumb: "assets/slide-thumbs/back-cover.jpg",
+  alt: "封底 · 感谢观看",
+  // The printed TEL / E-MAIL line stays clickable, like the old closing page.
+  links: [
+    { x: 37.9, y: 63.4, w: 13.4, h: 3.4, href: "tel:+8618911300923", label: "拨打 189113300923" },
+    { x: 51.2, y: 63.4, w: 11.2, h: 3.4, href: "mailto:834316142@qq.com", label: "发送邮件到 834316142@qq.com" }
+  ]
 };
 Object.values(experiences).forEach((experience) => {
   experience.projects.forEach((project) => {
     if (!project.slides?.length) return;
-    project.slides.push({ ...THANK_SLIDE });
+    project.slides.push({ ...BACK_COVER_SLIDE });
   });
 });
 
@@ -532,7 +540,6 @@ const elements = {
   totalCount: document.querySelector("[data-total-count]"),
   artwork: document.querySelector("[data-main-artwork]"),
   artworkGhost: document.querySelector("[data-artwork-ghost]"),
-  thankSlide: document.querySelector("[data-thank-slide]"),
   artworkLinks: document.querySelector("[data-artwork-links]"),
   slideCanvas: document.querySelector("[data-slide-canvas]"),
   loader: document.querySelector("[data-image-loader]"),
@@ -790,7 +797,6 @@ function sizeArtworkFrame() {
   frame.style.height = `${Math.round(height)}px`;
   // 1% of the frame width: media-box radii/shadows are stored as percentages
   // so they scale with the page instead of looking oversized on small screens;
-  // the THANK page also sizes its type from this unit so it fits any frame.
   frame.style.setProperty("--frame-unit", `${width / 100}px`);
   if (elements.slideCanvas) elements.slideCanvas.style.setProperty("--frame-unit", `${width / 100}px`);
   // the "other projects" panel overlays the stage bottom: nudge the whole
@@ -964,8 +970,8 @@ document.addEventListener("click", (event) => {
 });
 
 /* Contact / resume / outbound-link intents. These are captured on document
-   because the links live in several places (header, about dialog, THANK page,
-   artwork hotspots) and are re-rendered per slide. */
+   because the links live in several places (header, about dialog, artwork
+   hotspots) and are re-rendered per slide. */
 document.addEventListener("click", (event) => {
   const target = event.target instanceof Element ? event.target : null;
   if (!target) return;
@@ -974,11 +980,9 @@ document.addEventListener("click", (event) => {
     const href = contact.getAttribute("href") || "";
     const scope = contact.closest("[data-contact-card]")
       ? "about"
-      : contact.closest("[data-thank-slide]")
-        ? "thank"
-        : contact.closest(".site-header")
-          ? "header"
-          : "viewer";
+      : contact.closest(".site-header")
+        ? "header"
+        : "viewer";
     track("contact_click", {
       channel: href.indexOf("tel:") === 0 ? "tel" : "email",
       source: scope,
@@ -1034,7 +1038,7 @@ const cardImpressions = new Set();
 const impressionTimers = new Map();
 let impressionCheckTimer = 0;
 
-const slideTypeOf = (slide) => (isThank(slide) ? "thank" : isComposite(slide) ? "composite" : isStack(slide) ? "stack" : "image");
+const slideTypeOf = (slide) => (isComposite(slide) ? "composite" : isStack(slide) ? "stack" : "image");
 
 function startViewerSession(project, experience, source) {
   endViewerSession("restart");
@@ -1382,14 +1386,8 @@ function renderViewer() {
   elements.thumbnailRail.innerHTML = project.slides.map((slide, index) => {
     const videoCount = slideVideoCount(slide);
     const badge = videoCount ? `<i class="thumbnail-play" aria-hidden="true">▶${videoCount > 1 ? videoCount : ""}</i>` : "";
-    const label = isThank(slide) ? "查看感谢页" : `查看第 ${index + 1} 页${videoCount ? "（含视频）" : ""}`;
-    const visual = isThank(slide)
-      ? `<span class="thumbnail-thank" aria-hidden="true">
-          <i class="thumbnail-thank-word">THANKS</i>
-          <i class="thumbnail-thank-name">唐尉保 · UI/UX DESIGNER</i>
-          <i class="thumbnail-thank-contact">TEL：189113300923 ｜ E-MAIL：834316142@qq.com</i>
-        </span>`
-      : `<img src="${slideThumb(slide)}" alt="" loading="lazy">`;
+    const label = `查看第 ${index + 1} 页${videoCount ? "（含视频）" : ""}`;
+    const visual = `<img src="${slideThumb(slide)}" alt="" loading="lazy">`;
     return `
     <button class="thumbnail${index === state.slideIndex ? " is-current" : ""}" type="button" data-slide-index="${index}" role="option" aria-selected="${index === state.slideIndex}" tabindex="${index === state.slideIndex ? 0 : -1}" aria-label="${label}">
       ${visual}
@@ -1462,49 +1460,6 @@ function markArtworkReady() {
   window.setTimeout(refreshArtworkResolution, 60);
 }
 
-/* Closing THANK page: a DOM page instead of a bitmap. The main <img> has to be
-   emptied (no src, no stale load handlers) so the frame shows only the closing
-   content; the ghost layer still carries the outgoing bitmap when turning into
-   it, so the usual 640ms slide keeps working. */
-let thankHideTimer = 0;
-
-function hideThankSlide() {
-  window.clearTimeout(thankHideTimer);
-  const thank = elements.thankSlide;
-  if (!thank) return;
-  thank.hidden = true;
-  thank.style.transition = "none";
-  thank.style.transform = "";
-  thank.style.opacity = "";
-  thank.style.zIndex = "";
-}
-
-function showThankSlide() {
-  window.clearTimeout(thankHideTimer);
-  const thank = elements.thankSlide;
-  if (!thank) return;
-  clearArtworkLoading();
-  window.clearTimeout(slideAnimTimer);
-  slideAnimToken += 1;
-  elements.artwork.onload = null;
-  elements.artwork.onerror = null;
-  elements.artwork.classList.remove("is-loading");
-  elements.artwork.removeAttribute("src");
-  elements.artwork.alt = "";
-  elements.artwork.style.transition = "none";
-  elements.artwork.style.transform = "";
-  elements.artwork.style.opacity = "";
-  if (elements.artworkLinks) elements.artworkLinks.textContent = "";
-  resetMediaBoxes();
-  thank.hidden = false;
-  thank.style.transition = "none";
-  thank.style.transform = "";
-  thank.style.opacity = "";
-  void thank.offsetWidth;
-  thank.style.transition = "";
-  markArtworkReady();
-}
-
 function setArtworkPlaceholder(slide) {
   // Stack pages use the last layer as their rail thumb; the backdrop must
   // still match the layer actually on screen (the base layer on entry).
@@ -1517,12 +1472,7 @@ function setArtworkPlaceholder(slide) {
   elements.artworkFrame.style.backgroundPosition = "center";
 }
 
-function placeArtwork(slide, options = {}) {
-  if (isThank(slide)) {
-    showThankSlide();
-    return;
-  }
-  if (!options.keepThank) hideThankSlide();
+function placeArtwork(slide) {
   elements.artwork.classList.add("is-loading");
   showArtworkLoading();
   setArtworkPlaceholder(slide);
@@ -2048,7 +1998,6 @@ function renderOverlays(slide) {
 function resetArtworkLayers() {
   window.clearTimeout(slideAnimTimer);
   clearArtworkLoading();
-  hideThankSlide();
   if (elements.artworkLinks) elements.artworkLinks.textContent = "";
   slideAnimToken += 1;
   const ghost = elements.artworkGhost;
@@ -2075,100 +2024,6 @@ function moveArtwork(slide, direction) {
   if (!ghost || slideMotionQuery.matches) {
     resetArtworkLayers();
     placeArtwork(slide);
-    return;
-  }
-  // Leaving the closing THANK page: same 640ms slide as every other page turn,
-  // with the incoming bitmap sliding in below it (there is no bitmap to put on
-  // the ghost layer, so the closing page itself is the outgoing layer).
-  const thank = elements.thankSlide;
-  if (thank && !thank.hidden && !isThank(slide)) {
-    window.clearTimeout(slideAnimTimer);
-    const token = ++slideAnimToken;
-    clearArtworkLoading();
-    resetMediaBoxes();
-    if (slideMotionQuery.matches) {
-      hideThankSlide();
-      placeArtwork(slide);
-      return;
-    }
-    thank.style.zIndex = "3";
-    placeArtwork(slide, { keepThank: true });
-    sizeArtworkFrame();
-    const startSlide = () => {
-      if (token !== slideAnimToken) return;
-      const artwork = elements.artwork;
-      artwork.style.transition = "none";
-      artwork.style.transform = `translateY(${direction > 0 ? 100 : -100}%) scale(1.02)`;
-      thank.style.transition = "none";
-      thank.style.transform = "translateY(0) scale(1)";
-      void artwork.offsetWidth;
-      const easing = "cubic-bezier(.76, 0, .24, 1)";
-      const duration = 640;
-      artwork.style.transition = `transform ${duration}ms ${easing}`;
-      thank.style.transition = `transform ${duration}ms ${easing}`;
-      window.requestAnimationFrame(() => {
-        if (token !== slideAnimToken) return;
-        artwork.style.transform = "translateY(0) scale(1)";
-        thank.style.transform = `translateY(${direction > 0 ? -100 : 100}%) scale(1)`;
-      });
-      clearArtworkLoading();
-      elements.artwork.classList.remove("is-loading");
-      window.clearTimeout(thankHideTimer);
-      slideAnimTimer = window.setTimeout(() => {
-        if (token !== slideAnimToken) return;
-        hideThankSlide();
-        artwork.style.transition = "";
-        artwork.style.transform = "";
-        renderSlideLinks(slide);
-        if (isComposite(slide)) {
-          renderOverlays(slide);
-          startSlideMedia(slide);
-        }
-        markArtworkReady();
-      }, duration + 40);
-    };
-    whenImageDecoded(elements.artwork, startSlide);
-    return;
-  }
-  // Turning into the closing THANK page: identical 640ms slide to every other
-  // page turn. The bottom panel only opens on this page, so the frame resize is
-  // deferred until the slide has finished (see scheduleLastSlide) - the slide
-  // itself runs at a stable frame size, which is what used to jitter.
-  if (isThank(slide)) {
-    const previousSrc = elements.artwork.currentSrc || elements.artwork.src || "";
-    resetArtworkLayers();
-    resetMediaBoxes();
-    showThankSlide();
-    if (!previousSrc) return;
-    const token = slideAnimToken;
-    const layer = elements.thankSlide;
-    ghost.src = previousSrc;
-    ghost.alt = "";
-    ghost.style.visibility = "visible";
-    ghost.style.opacity = "";
-    ghost.style.transform = "translateY(0)";
-    ghost.style.transition = "none";
-    layer.style.transition = "none";
-    layer.style.transform = `translateY(${direction > 0 ? 100 : -100}%) scale(1.02)`;
-    void ghost.offsetWidth;
-    const easing = "cubic-bezier(.76, 0, .24, 1)";
-    const duration = 640;
-    ghost.style.transition = `transform ${duration}ms ${easing}`;
-    layer.style.transition = `transform ${duration}ms ${easing}`;
-    window.requestAnimationFrame(() => {
-      if (token !== slideAnimToken) return;
-      ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%)`;
-      layer.style.transform = "translateY(0) scale(1)";
-    });
-    slideAnimTimer = window.setTimeout(() => {
-      if (token !== slideAnimToken) return;
-      ghost.style.visibility = "hidden";
-      ghost.style.transition = "none";
-      ghost.style.transform = "";
-      layer.style.transition = "";
-      layer.style.transform = "";
-      markArtworkReady();
-    }, duration + 40);
     return;
   }
   const previousSrc = elements.artwork.currentSrc || elements.artwork.src;
@@ -2436,7 +2291,6 @@ function setActiveScreen(screenName) {
     clearFullscreenMorph();
     resetMediaBoxes();
     clearArtworkLoading();
-    hideThankSlide();
   }
   if (screenName !== "viewer") window.clearTimeout(lastSlideTimer);
   if (screenName !== "viewer" && isViewerFullscreen()) {
