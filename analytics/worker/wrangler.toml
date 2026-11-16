@@ -13,7 +13,7 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "tangyubao-analytics"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "422352f9-91df-44b9-bbd8-f62df30dedf8"
 
 [vars]
 SITE_ID = "tangyubao-portfolio"
