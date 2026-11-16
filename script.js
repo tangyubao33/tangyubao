@@ -1014,9 +1014,55 @@ const slideMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 let slideAnimToken = 0;
 let slideAnimTimer = 0;
 
+/* Loading veil: while a page bitmap is still being fetched/decoded the frame
+   shows a blurred, slightly dimmed copy of whatever is underneath (rail thumb
+   or the outgoing page) plus a spinner, so a slow 4K page never reads as a
+   blank/upscaled placeholder. The veil only appears after a short delay so a
+   cached page never flashes it, and once visible it stays up briefly before
+   fading out (a 20ms blink at the threshold would read as a flicker). */
+const ARTWORK_LOADER_DELAY = 220;
+const ARTWORK_LOADER_MIN_VISIBLE = 300;
+let artworkLoaderShowTimer = 0;
+let artworkLoaderHideTimer = 0;
+let artworkLoaderShownAt = 0;
+
+function showArtworkLoading() {
+  window.clearTimeout(artworkLoaderShowTimer);
+  window.clearTimeout(artworkLoaderHideTimer);
+  artworkLoaderShowTimer = window.setTimeout(() => {
+    if (state.screen === "viewer" && elements.viewerScreen && !elements.viewerScreen.hidden) {
+      artworkLoaderShownAt = performance.now();
+      elements.loader.classList.add("is-active");
+    }
+  }, ARTWORK_LOADER_DELAY);
+}
+
+function hideArtworkLoading() {
+  window.clearTimeout(artworkLoaderShowTimer);
+  if (!elements.loader.classList.contains("is-active")) return;
+  const remaining = ARTWORK_LOADER_MIN_VISIBLE - (performance.now() - artworkLoaderShownAt);
+  if (remaining <= 0) {
+    window.clearTimeout(artworkLoaderHideTimer);
+    elements.loader.classList.remove("is-active");
+    return;
+  }
+  window.clearTimeout(artworkLoaderHideTimer);
+  artworkLoaderHideTimer = window.setTimeout(() => {
+    elements.loader.classList.remove("is-active");
+  }, remaining);
+}
+
+/* Immediate teardown for page swaps / leaving the viewer, where carrying a
+   fade-out into the next transition would smear the blur across it. */
+function clearArtworkLoading() {
+  window.clearTimeout(artworkLoaderShowTimer);
+  window.clearTimeout(artworkLoaderHideTimer);
+  elements.loader.classList.remove("is-active");
+}
+
 function markArtworkReady() {
   elements.artwork.classList.remove("is-loading");
-  elements.loader.classList.remove("is-active");
+  hideArtworkLoading();
   elements.artworkFrame.style.backgroundImage = "";
   sizeArtworkFrame();
   window.setTimeout(refreshArtworkResolution, 60);
@@ -1036,7 +1082,7 @@ function setArtworkPlaceholder(slide) {
 
 function placeArtwork(slide) {
   elements.artwork.classList.add("is-loading");
-  elements.loader.classList.add("is-active");
+  showArtworkLoading();
   setArtworkPlaceholder(slide);
   const ready = () => whenImageDecoded(elements.artwork, markArtworkReady);
   elements.artwork.onload = ready;
@@ -1548,6 +1594,7 @@ function renderOverlays(slide) {
 
 function resetArtworkLayers() {
   window.clearTimeout(slideAnimTimer);
+  clearArtworkLoading();
   if (elements.artworkLinks) elements.artworkLinks.textContent = "";
   slideAnimToken += 1;
   const ghost = elements.artworkGhost;
@@ -1589,7 +1636,7 @@ function moveArtwork(slide, direction) {
   ghost.style.visibility = "visible";
   ghost.style.transform = "translateY(0)";
   elements.artwork.classList.remove("is-loading");
-  elements.loader.classList.add("is-active");
+  showArtworkLoading();
 
   const incoming = new Image();
   const incomingSrc = pickSlideSource(slide);
@@ -1614,7 +1661,7 @@ function moveArtwork(slide, direction) {
         ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%) scale(.98)`;
         elements.artwork.style.transform = "translateY(0) scale(1)";
       });
-      elements.loader.classList.remove("is-active");
+      clearArtworkLoading();
       elements.artwork.classList.remove("is-loading");
       slideAnimTimer = window.setTimeout(() => {
         if (token !== slideAnimToken) return;
@@ -1802,6 +1849,7 @@ function setActiveScreen(screenName) {
     clearViewerEntry();
     clearFullscreenMorph();
     resetMediaBoxes();
+    clearArtworkLoading();
   }
   if (screenName !== "viewer" && isViewerFullscreen()) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});

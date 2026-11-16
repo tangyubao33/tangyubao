@@ -405,7 +405,6 @@ body.is-about-open { overflow: hidden; }
 .artwork-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; user-select: none; opacity: 1; }
 .artwork-frame [data-main-artwork] { z-index: 1; }
 .artwork-ghost { z-index: 2; visibility: hidden; }
-.artwork-frame img.is-loading { opacity: .15; }
 /* Clickable hotspots printed on a page (for example a product URL):
    transparent anchors over the bitmap that only surface on hover/focus. */
 .artwork-links { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
@@ -414,9 +413,15 @@ body.is-about-open { overflow: hidden; }
 .artwork-link:focus-visible { box-shadow: inset 0 0 0 2px rgba(120, 190, 255, .95); }
 .artwork-link { touch-action: manipulation; }
 @media (hover: none), (pointer: coarse) { .artwork-link { min-height: 34px; } }
-.image-loader { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
-.image-loader.is-active { opacity: 1; }
-.image-loader span { width: 28px; height: 28px; border: 2px solid rgba(255, 255, 255, .14); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+/* Loading veil for the big page bitmap: the frame's placeholder thumbnail (or
+   the outgoing page during a turn) is blurred and gently dimmed while the real
+   image loads, with a frosted spinner disc on top in the same glass language as
+   the media play button. It is only shown after a short delay (script.js) so a
+   cached page never flashes it, and it fades out once the image is decoded. */
+.image-loader { position: absolute; z-index: 4; inset: 0; display: grid; place-items: center; opacity: 0; pointer-events: none; background: rgba(9, 12, 17, .24); backdrop-filter: blur(22px) saturate(.94); -webkit-backdrop-filter: blur(22px) saturate(.94); transition: opacity .32s ease; }
+.image-loader.is-active { opacity: 1; transition: opacity .18s ease; }
+.image-loader span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(8, 10, 14, .56); box-shadow: 0 10px 26px rgba(0, 0, 0, .38), inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.image-loader span::after { content: ""; width: 20px; height: 20px; border: 2px solid rgba(255, 255, 255, .24); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Composite slides: a PPT background image with media boxes laid on top.
@@ -691,7 +696,7 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 .group-copy small { color: #8a929e; font-size: clamp(10px, .85vw, 12px); letter-spacing: .06em; line-height: 1.35; }
 .group-projects { --stream-card-width: clamp(210px, 18vw, 324px); grid-row: 1; display: flex; align-items: stretch; gap: var(--group-gap); width: max-content; min-height: 0; }
 
-.stream-project { position: relative; z-index: 1; flex: 0 1 var(--stream-card-width); min-width: 0; width: auto; height: 100%; max-height: 100%; align-self: stretch; overflow: hidden; padding: 0; border: 0; background: #1a1b1d; color: #fff; text-align: left; cursor: pointer; flex: 0 0 var(--stream-card-width); animation: stream-card-in .9s both var(--ease); transition: flex-basis .65s cubic-bezier(.66,0,.2,1), transform .7s var(--ease), filter .55s, opacity .45s, box-shadow .5s; }
+.stream-project { position: relative; z-index: 1; flex: 0 1 var(--stream-card-width); min-width: 0; width: var(--stream-card-width); height: 100%; max-height: 100%; align-self: stretch; overflow: hidden; padding: 0; border: 0; background: #1a1b1d; color: #fff; text-align: left; cursor: pointer; flex: 0 0 var(--stream-card-width); animation: stream-card-in .9s both var(--ease); transition: width .65s cubic-bezier(.66,0,.2,1), flex-basis .65s cubic-bezier(.66,0,.2,1), transform .7s var(--ease), filter .55s, opacity .45s, box-shadow .5s; }
 .stream-project:nth-child(2) { animation-delay: .08s; }
 .stream-project:nth-child(3) { animation-delay: .16s; }
 @keyframes stream-card-in { from { opacity: 0; translate: 0 36px; } to { opacity: 1; translate: 0; } }
@@ -713,9 +718,10 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 .group-projects:has(.stream-project:hover) .stream-project:hover,
 .group-projects:has(.stream-project:focus-visible) .stream-project:focus-visible {
   flex: 0 0 var(--expanded-card-width, var(--stream-card-width));
+  width: var(--expanded-card-width, var(--stream-card-width));
 }
 .group-projects:has(.stream-project.is-returning) { width: var(--group-width) !important; }
-.group-projects:has(.stream-project.is-returning) .stream-project { flex: 0 0 var(--stream-card-width) !important; }
+.group-projects:has(.stream-project.is-returning) .stream-project { flex: 0 0 var(--stream-card-width) !important; width: var(--stream-card-width) !important; }
 /* No geometric lift on hover: moving the card up makes its bottom edge slide
    out from under a pointer resting near it, which flips :hover on/off and makes
    the cover flicker. The shadow alone carries the lift. */
