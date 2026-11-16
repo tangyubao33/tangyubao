@@ -84,6 +84,7 @@ const slideVariants = (src) => {
 /* Cards use the same cover art as viewer page 1 but only need a fraction of
    its pixels (a 259px-wide card at 2x is ~520 device px). Serving the 3200px
    JPEG there cost ~3MB on the home screen; the WebP variants cut that ~6x. */
+const COVER_ASPECT = 16 / 9;
 const coverSrcset = (cover) => {
   const base = cover.replace(/\.[^.]+$/, "");
   // 640 is enough for the small home cards (and saves another ~40% there);
@@ -92,6 +93,51 @@ const coverSrcset = (cover) => {
     .map((width) => `${base}.w${width}.webp ${width}w`)
     .join(", ");
 };
+/* Covers are painted with object-fit: cover inside tall / narrow cards, so the
+   resolution that matters is the height crop, not the card width: a 259×417
+   card needs a ~741px-wide 16:9 source (741 = 417 × 16/9). The static `sizes`
+   attributes only describe the width, which made the browser pick w640 and
+   look soft on retina screens. Measure the real box and set an exact `sizes`
+   in CSS px; the browser multiplies it by DPR and picks the right variant. */
+const coverBase = (cover) => cover.replace(/\.[^.]+$/, "");
+const PORTRAIT_SRCSET = (cover) => {
+  const base = coverBase(cover);
+  return [720, 960, 1280].map((width) => `${base}.crop0.8.${width}.webp ${width}w`).join(", ");
+};
+/* Tall cards crop the landscape cover vertically, so a 16:9 source has to be
+   huge to stay sharp (a 221×597 project card needs ~1053px of width). Instead
+   use a portrait crop of the same artwork (full height, centre 0.8 aspect):
+   object-fit: cover then shows exactly the same pixels as before, but the file
+   is 3–5× smaller. Wide cards keep the landscape srcset. */
+function updateCoverSizes(root) {
+  const scope = root || document;
+  scope.querySelectorAll("img[data-cover]").forEach((img) => {
+    const card = img.closest(".stream-project, .project-card, .other-project");
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const cover = img.dataset.cover;
+    const aspect = rect.width / rect.height;
+    if (aspect < 0.8) {
+      const sizes = `${Math.max(1, Math.ceil(rect.height * 0.8))}px`;
+      if (img.dataset.coverMode !== "portrait") {
+        img.dataset.coverMode = "portrait";
+        img.srcset = PORTRAIT_SRCSET(cover);
+        img.src = `${coverBase(cover)}.crop0.8.960.webp`;
+      }
+      if (img.sizes !== sizes) img.sizes = sizes;
+    } else {
+      const need = Math.max(rect.width, rect.height * COVER_ASPECT);
+      const sizes = `${Math.ceil(need)}px`;
+      if (img.dataset.coverMode !== "landscape") {
+        img.dataset.coverMode = "landscape";
+        img.srcset = coverSrcset(cover);
+        img.src = `${coverBase(cover)}.w960.webp`;
+      }
+      if (img.sizes !== sizes) img.sizes = sizes;
+    }
+  });
+}
 
 const isStack = (slide) => Boolean(slide && slide.type === "stack");
 const stackProgress = new WeakMap();
@@ -1382,7 +1428,7 @@ function renderTimeline() {
       <div class="group-projects" style="--group-width:calc(${experience.projects.map(() => "var(--stream-card-width)").concat(experience.projects.slice(1).map(() => "var(--group-gap)")).join(" + ")})">
         ${experience.projects.map((project, projectIndex) => `
           <button class="stream-project${project.disabled ? " is-pending" : ""}" type="button" data-home-project="${project.id}" data-home-experience="${experience.id}" aria-label="查看 ${project.name}">
-            <img src="${project.cover}" srcset="${coverSrcset(project.cover)}" sizes="(max-width: 760px) 74vw, (max-height: 520px) and (min-width: 761px) 26vw, 18vw" alt="" loading="lazy" decoding="async"${experienceIndex === 0 && projectIndex === 0 ? ' fetchpriority="high"' : ""}>
+            <img src="${coverBase(project.cover)}.w640.webp" data-cover="${project.cover}" alt="" loading="lazy" decoding="async"${experienceIndex === 0 && projectIndex === 0 ? ' fetchpriority="high"' : ""}>
             <span class="stream-project-top"><i>${pad(projectIndex + 1)}</i><em>${project.type}</em></span>
             <span class="stream-project-info">
               <b>${project.name}</b>
@@ -1393,6 +1439,8 @@ function renderTimeline() {
       </div>
     </section>
   `).join("");
+  updateCoverSizes(elements.timeline);
+  window.requestAnimationFrame(() => updateCoverSizes(elements.timeline));
 }
 
 function renderProjects() {
@@ -1412,7 +1460,7 @@ function renderProjects() {
 
   elements.projectGrid.innerHTML = experience.projects.map((project, index) => `
     <button class="project-card${project.disabled ? " is-disabled" : ""}" type="button" ${project.disabled ? "disabled" : `data-project="${project.id}"`}>
-      <img src="${project.cover}" srcset="${coverSrcset(project.cover)}" sizes="(max-width: 760px) calc(100vw - 48px), (max-width: 1100px) 44vw, 33vw" alt="" loading="lazy" decoding="async">
+      <img src="${coverBase(project.cover)}.w640.webp" data-cover="${project.cover}" alt="" loading="lazy" decoding="async">
       <span class="project-card-number">${pad(index + 1)}</span>
       <span class="project-card-content">
         <span>${project.type}</span>
@@ -1421,6 +1469,8 @@ function renderProjects() {
       </span>
     </button>
   `).join("");
+  updateCoverSizes(elements.projectGrid);
+  window.requestAnimationFrame(() => updateCoverSizes(elements.projectGrid));
 }
 
 function otherProjectItems() {
@@ -1443,11 +1493,13 @@ function renderOtherProjects() {
     const delay = Math.round(60 + 150 * Math.pow(index / span, 2));
     return `
     <button class="other-project" type="button" data-other-project="${project.id}" data-other-experience="${experience.id}" aria-label="查看 ${project.name}" style="--stagger: ${delay}ms">
-      <img src="${project.cover}" srcset="${coverSrcset(project.cover)}" sizes="(max-width: 760px) 44vw, 190px" alt="" loading="lazy" decoding="async">
+      <img src="${coverBase(project.cover)}.w640.webp" data-cover="${project.cover}" alt="" loading="lazy" decoding="async">
       <b>${project.name}</b>
       <em>${experience.company} · ${experience.period}</em>
     </button>`;
   }).join("");
+  updateCoverSizes(rail);
+  window.requestAnimationFrame(() => updateCoverSizes(rail));
 }
 
 /* Hovering a home card prefetches that project's first viewer page, so the
@@ -1463,13 +1515,7 @@ elements.timeline.addEventListener("pointerover", (event) => {
   cardPrefetchTimer = window.setTimeout(() => {
     const project = experiences[card.dataset.homeExperience]?.projects.find((item) => item.id === card.dataset.homeProject);
     const first = project?.slides?.[0];
-    if (first) {
-      warmSlideImage(first);
-      const small = new Image();
-      small.decoding = "async";
-      small.src = initialArtworkSource(first);
-      if (typeof small.decode === "function") small.decode().catch(() => {});
-    }
+    if (first) warmSlideImage(first);
   }, 150);
 });
 
@@ -1616,21 +1662,6 @@ function setArtworkPlaceholder(slide) {
   elements.artworkFrame.style.backgroundPosition = "center";
 }
 
-// On the first paint of an opened project, decode a half-resolution variant so
-// the artwork appears in roughly a third of the time; refreshArtworkResolution()
-// then upgrades it to the full device-pixel variant once that has decoded. The
-// page ends at the same 2560 bitmap as before, so final quality is unchanged.
-const INITIAL_VIEWER_WIDTH = 1280;
-function initialArtworkSource(slide) {
-  const wanted = pickSlideSource(slide);
-  const variants = activeVisualSlide(slide)?.variants;
-  if (!variants?.length) return wanted;
-  const wantedVariant = variants.find((variant) => variant.src === wanted);
-  if (!wantedVariant || wantedVariant.width <= INITIAL_VIEWER_WIDTH) return wanted;
-  const initial = variants.find((variant) => variant.width === INITIAL_VIEWER_WIDTH) || variants[0];
-  return initial.width < wantedVariant.width ? initial.src : wanted;
-}
-
 function placeArtwork(slide) {
   beginArtworkLoad(slide, "initial");
   elements.artwork.classList.add("is-loading");
@@ -1642,7 +1673,7 @@ function placeArtwork(slide) {
     finishArtworkLoad(false);
     markArtworkReady();
   };
-  elements.artwork.src = initialArtworkSource(slide);
+  elements.artwork.src = pickSlideSource(slide);
   elements.artwork.alt = slide.alt || "";
   renderSlideLinks(slide);
   renderOverlays(slide);
@@ -2509,6 +2540,13 @@ function setActiveScreen(screenName) {
       if (!routeHydrated) screen.hidden = true;
       else window.setTimeout(() => { if (!screen.classList.contains("is-active")) screen.hidden = true; }, 430);
     }
+  });
+  // Cards rendered while their screen was hidden have no measurable box yet;
+  // set the exact cover `sizes` once the layout is real.
+  window.requestAnimationFrame(() => {
+    if (state.screen === "home") updateCoverSizes(elements.timeline);
+    else if (state.screen === "projects") updateCoverSizes(elements.projectGrid);
+    else if (state.screen === "viewer") updateCoverSizes(elements.otherProjectsRail);
   });
 }
 
@@ -3392,6 +3430,7 @@ function scheduleStreamMeasure(delay = 0) {
   }, delay);
 }
 
+let coverSizesTimer = 0;
 window.addEventListener("resize", () => {
   scheduleStreamMeasure(120);
   scheduleImpressionCheck(240);
@@ -3402,6 +3441,10 @@ window.addEventListener("resize", () => {
     window.clearTimeout(thumbnailRevealTimer);
     revealCurrentThumbnail("auto");
   }
+  // card boxes change with the viewport / breakpoints; recompute the exact
+  // cover `sizes` after layout settles so retina covers stay sharp
+  window.clearTimeout(coverSizesTimer);
+  coverSizesTimer = window.setTimeout(() => updateCoverSizes(document), 160);
 });
 
 renderTimeline();

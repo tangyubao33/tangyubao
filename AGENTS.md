@@ -23,7 +23,7 @@
 | `analytics/` | 埋点数据层：共享聚合 `summary.js`、本地 collector `local/`、Cloudflare Worker `worker/`、自包含看板 `dashboard.html`、示例数据与工具；说明见 `analytics/README.md`、分析见 `analytics/体验分析报告.md`。不参与 GitHub Pages 站点构建，但会随仓库发布 |
 | `assets/fonts/` | Caveat / Kalam woff2（手写体强调）。`caveat-600.woff2` 已子集化为 **2.5KB**（仅数字 0–9 与 `~`，只服务「2016~2026」）；`caveat-600.source.woff2` 是未子集的母版（51KB，不直接引用，改文案后用它重新子集）。Kalam 未被引用，仅作 fallback。 |
 | `assets/marks/` | 三家公司图标：第一段经历用 `douyin.webp`（抖音，黑底圆角 + 音符，183px）、`jd.webp`、`kingsoft.webp`；均为 180–183px RGBA 透明圆角。`bytedance.webp`（字节跳动蓝色柱状标）保留但已不再引用 |
-| `assets/thumbs/` | 卡片封面（允许压缩）：抖音四个项目 + 金山词霸由 5760×3240 设计稿压成 `douyin-platform / douyin-ai-cover / douyin-other / douyin-ai-practice / mobile.jpg`（3200×1800 JPEG q84，~370–520 KB）；JD 由 `唐尉保作品集2_files/图片1.png`（3840×2160）导出同规格 `jd.jpg`。高分辨率是为了让竖长裁切 + 2× DPR 的卡片不糊 |
+| `assets/thumbs/` | 卡片封面（允许压缩）：抖音四个项目 + 金山词霸由 5760×3240 设计稿压成 `douyin-platform / douyin-ai-cover / douyin-other / douyin-ai-practice / mobile.jpg`（3200×1800 JPEG q84，~370–520 KB）；JD 由 `唐尉保作品集2_files/图片1.png`（3840×2160）导出同规格 `jd.jpg`。另对每张封面生成 **0.8 宽高比的竖版裁切变体** `*.crop0.8.{720,960,1280}.webp`（保留全高、水平居中裁切），供竖长卡片按实际裁切比例选图，避免用 16:9 大图硬裁导致发糊。 |
 | `assets/slide-thumbs/` | 查看器缩略图（16:9，WebP；`byte-*` 为抖音四个项目、`jd/kingsoft` 为历史项目、`back-cover.webp` 为统一封底）。每张同时有 320×180 基线与 `*.w240.webp`（240×135），缩略图栏用 `srcset` 240/320 按 DPR 选档。 |
 | `assets/works/bytedance/` | 2026 作品材料导入的抖音四个项目：`platform`（24 页；图库 7–11、13–16、17–20、25–26 页各合并为 1 页原位渐隐叠加，进入始终从首层开始，缩略图取最终层；开场 6 页按图库 1/2/5/3/6/4 排布）、`ai-cover`（9 页）、`other`（5 页）、`ai-practice`（5 页图片 + 1 页复合视频）；原图均为原始 3840×2160 PNG，不做缩放/有损压缩；每页旁边有 `.w960/.w1280/.w1920/.w2560.webp` 响应式变体（q95）。其中 `other/01.jpg`、`ai-cover/06.jpg`、`ai-cover/07.jpg` 已换成 2026 图库的 5760×3240 视频页背景；视频页另生成 `*-preview.jpg`（背景 + poster 合成，用于统一翻页） |
 | `assets/works/` | 统一封底 `back-cover.png`（由图库 `2026 作品材料/作品网站图库/01 作品封面/封底.jpg` 转 3840×2160 PNG）+ `.w960/.w1280/.w1920/.w2560.webp` 变体；所有项目的最后一页共用这一张 |
@@ -55,6 +55,11 @@
 - **首页封面卡宽度在 2026-11-13 增加 20%**：桌面 `clamp(210px, 18vw, 324px)`（原 175/15vw/270）；手机 `74.4vw`、上限 324px；横屏 `clamp(180px, 26.4vw, 264px)`。加宽后卡片横向比例更大，封面能露出更多横向内容。
 - 换封面时替换对应 `assets/thumbs/*.jpg` 即可；**当前封面同时作为作品第 1 页**（`slides[0]` 使用 `project.cover`，第一张缩略图也用封面重生成），后续内页保持原图、顺序与封面独立。
 - **卡片封面走响应式图片（2026-11-16）**：`assets/thumbs/*` 除 3200×1800 JPEG 母版外新增 **640 宽 WebP**（w640），卡片 `<img>` 使用 `srcset`（640/960/1280/1920/2560）+ `sizes` 按卡片实际显示宽度选档，`decoding=async`；首页第一张封面额外 `fetchpriority=high` 并在 index.html 里 `preload`（`imagesrcset`/`imagesizes`），避免 JS 渲染卡片前发现不了首图。悬停卡片 150ms 后预取该作品第 1 页（2500 宽变体），点开预览更快命中。实测 4G 限速（1.6Mbps / 150ms RTT / CPU 4×）桌面首页图片从 ~2.9MB 降到 ~0.31MB，移动 ~0.39MB。
+- **封面清晰度按"实际裁切比例"选图（2026-11-16）**：卡片是 `object-fit: cover` 的竖长框（首页卡约 0.62、项目卡约 0.37），16:9 封面被竖向裁切时，所需分辨率由**卡片高度**决定而不仅是宽度——旧 `sizes` 只写宽度，浏览器会选 w640，Retina 上明显发糊。现在 `updateCoverSizes()` 会测量每张卡的真实矩形：
+  - 竖卡（aspect < 0.8）：改用 `*.crop0.8.{720,960,1280}.webp`（保留全高、水平居中裁切，`object-fit: cover` 后可见像素与原来完全一致），`sizes = 画面宽度 × 0.8`；
+  - 宽卡（aspect ≥ 0.8，如手机项目卡 / 横屏首页卡）：继续用 16:9 的 w640–w2560 变体，`sizes = max(宽度, 高度×16/9)`；
+  - 在页面渲染后、screen 显示后与 resize 时重算（隐藏屏幕渲染时矩形为 0，必须等布局可见）。
+  实测 1440@2x：首页 6 张封面约 315KB（w720 档，清晰），项目页 4 张约 589KB（crop960，清晰）；不裁切方案要 1.5MB（首页）/3MB（项目页）才达到同等清晰度。
 - **卡片文字层**：顶部是项目名 + 页数/类型（`24 PAGES · EXPLORE` 或「项目资料整理中」），底部是序号 `01` + 类型（`PLATFORM · WEB`）；遮罩为「顶部强渐变 + 底部弱渐变」两层，hover 时整层透明度 .76 → .38；`PENDING` 角标位于项目名块下方 52px。**2026-11-15 调整**：顶部文字块内缩到 `top: 22px / left: 22px`（原来 13 / 15），并且项目名改用站点字体（`font-family: inherit`，Inter / PingFang SC 栈）——项目名里中英文混排（如「抖音AI封面」）此前中文走回退字体、Latin 走 Impact，两种字形混在一起；现在标题与下方页数行同字体（600 字重、`line-height 1.2`）。
 - **Safari / 微信 WebKit 封面重叠修复（2026-11-16）**：WebKit 计算 `.group-projects { width: max-content }` 时**不把「只有 `flex-basis`、没有 `width`」的卡片算进内在宽度**（实测项目容器宽被算成 0/27px），导致首页三组经历按信息块宽度排布、封面互相叠在一起（Chrome 正常）。修法是给 `.stream-project` 补上显式 `width: var(--stream-card-width)`，hover / focus-visible 展开时同步 `width: var(--expanded-card-width, var(--stream-card-width))` 并把 `width` 加进 `.65s cubic-bezier(.66,0,.2,1)` 过渡，这样分组宽度会随展开一起变宽（Safari 与 Chrome 实测几何完全一致）；`.is-returning` 期间 `width` 也要用 `!important` 钉回静止值。iPhone 微信（WKWebView）与 iPhone/桌面 Safari 均按此修复。
 - **hover 展开延迟 150ms（2026-11-16）**：指针停留在卡片上 **150ms** 后才添加 `.stream-project.is-expanded`、开始展开；首页所有 hover 视觉态（展开宽度、压暗其余封面、隐藏左上项目名、封面提亮、阴影）都改为由这个 class 驱动，**快速划过（含横向扫过整排）不会展开、不压暗**。键盘 `:focus-visible` 仍然即时展开；拖拽开始时会清掉展开状态，松手后对指针下的卡片重新计时；离开卡片立即收起（收起不加延迟）。实现集中在 `script.js` 的 `setStreamExpanded / armStreamHover / resetHoverReveal` 与 `styles.css` 的 `.is-expanded` / `.is-hovering` 规则。
@@ -186,7 +191,6 @@
 - **派生变体**：每页生成 `w960 / w1280 / w1920 / w2560` 四档 WebP（q95，视觉近无损），放在原图同目录；JD/金山页在 `唐尉保作品集2_files/` 下同样生成。
 - **运行时选择**：`pickSlideSource()` 计算「作品框 CSS 宽度 × min(devicePixelRatio, 2)」，选最小够用的变体。**超过最大变体时不再直接回退原 PNG**：目标 ≤ 2560×1.3 就用 2560 变体（例如 1440@2x 全屏要 2880，用 2560 上采样 12% 肉眼无感，但省掉数百 KB～数 MB 的 4K 母版）；只有真正超过 3328 的 4K 全屏才用原图。
 - **预加载**：可见页**优先**——`showSlide` 只加载当前页；等当前页 `decode()` 完成（初始进入在 `markArtworkReady`、翻页在动画启动前）再 `warmViewerNeighbors()` 预热相邻页。**初始进入**先预热前后各 1 页，后 2 页延后 900ms（避免和首图/升级图抢带宽）；**翻页**时一次预热后 2 + 前 1（保证连续翻页不出现 loading）。`warmSlideImage()` 预热后立即 `decode()` 并用 LRU(4) 保住已解码位图。
-- **预览首开渐进加载（2026-11-16）**：首次进入查看器时 `placeArtwork` 先解码 **`w1280` 变体**（体积约为 2560 变体的 1/3），随后 `refreshArtworkResolution()` 在后台把当前页升级为 2560 变体；**最终显示的仍是与之前完全相同的 2560 位图，画质不降**，只是首屏出现更快。首页卡片悬停预取会同时预热 1280（首开用）与 2560（升级用）两个 URL。
 - **全屏/窗口变化**：`refreshArtworkResolution()` 在 resize、进入/退出全屏、图片加载完成后重新选档；尺寸变大升级、变小降级，不重复请求同一 URL。
 - **渐进占位**：首次进入/直接加载时用 320×180 轨道缩略图作为 `.artwork-frame` 背景（`setArtworkPlaceholder`），大图就绪后清除，避免白屏；**翻页过程中不再改占位背景**，避免额外重绘。
 - **占位不能平铺**：占位缩略图必须 `background-size: cover` + `background-repeat: no-repeat` + `background-position: center`；后面的 `.artwork-frame` 简写会把它们重置，需在 CSS 末尾再次声明（并在 JS 内联设置），否则硬刷新时 320×180 缩略图会平铺成“一屏很多图片”。
@@ -267,7 +271,7 @@
 - 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）；`0002_geo` 迁移已应用，D1 增加 `region/city/continent` 列（由 Cloudflare 边缘写入，不存 IP）。
 - 看板令牌不写入仓库，本机保存在 `analytics/local/.data/dashboard-token.txt`（已 gitignore）；本地 `file://` / `localhost` 预览默认不上报，需显式加 `?analytics_endpoint=…`（或 `?analytics_force=1`）才会走线上 collector。
 - `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
-- 首屏图片已响应式（封面 640/960/1280/1920/2560 WebP `srcset` + 首图 preload）；Caveat 手写体已子集化（51KB → 2.5KB）；预览缩略图已 WebP + 240/320 `srcset`；预览首开先 1280 再后台升级 2560（最终画质不变）。剩余可继续：① 变体改 AVIF（再省 25–35%）；② 国内访问把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余最大变量）；③ Service Worker 预缓存首屏资源，改善复访。详见 `analytics/体验分析报告.md`。
+- 首屏图片已响应式（封面 16:9 WebP 640–2560 + 竖版裁切 crop0.8 720/960/1280，按卡片实际裁切比例选图）；Caveat 手写体已子集化（51KB → 2.5KB）；预览缩略图已 WebP + 240/320 `srcset`；预览首图直接加载 2560，加载期间显示既有「模糊遮罩 + spinner」，不再插入 1280 过渡（避免首屏发糊）。剩余可继续：① 变体改 AVIF（再省 25–35%）；② 国内访问把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余最大变量）；③ Service Worker 预缓存首屏资源，改善复访。详见 `analytics/体验分析报告.md`。
 - 埋点口径的已知局限（下载点击≠保存成功、DNT 不上报、无跨设备、会话 30 分钟上限、封底页计入总页数等）集中写在 `analytics/体验分析报告.md §7`，对外解释数据时以此为准。
 
 ## 6. 变更记录（主题合并）
@@ -335,7 +339,7 @@
 - **2026-11-16（图片加载优化）**：4G 限速（1.6Mbps / 150ms / CPU 4×）实测首页图片 **2914KB → 311KB**、FCP 2588→1156ms、LCP 15684→2780ms；移动 390@3x 首页图片 386KB、LCP 1716ms。做法：封面 `srcset`（新增 w640，按卡片宽度选档）+ 首图 preload/fetchpriority、首页卡片悬停预取第 1 页、全屏改为 2560 变体不回退 4K PNG（省 ~0.67MB/张）、预览先加载可见页再预热相邻页（打开预览 4315→2362ms，连续翻页 loading 0 次）。
 - **2026-11-16（视频声音与图片防盗）**：修掉「个人AI转型实践第 6 页声音要点两次以上」——控制条 2.6s 自动隐藏后，第一次点击落在隐藏控制条的底部区域会被当成点画面而**暂停视频**，用户需要再点静音、再点播放；现在带音轨且静音的视频控制条常显、取消静音在同一手势里补 `play()`，控制条隐藏时点击底部区域只唤出控制条不暂停。同时加图片防盗：拦截图片/作品框/卡片/缩略图的右键菜单与拖拽、iOS 长按 callout，全屏右键翻页不受影响。
 - **2026-11-16（触控板翻页）**：修掉 Mac 触控板一次滑动会连续翻多页——原来每个 wheel 事件累计到 24px 且间隔 230ms 就翻页，触控板的惯性流每帧都在触发；现在翻页后忽略同一串惯性事件（事件间隔 <60ms）并等 640ms 动画，停顿 60ms 以上才重新计数，鼠标滚轮有间隔的档位不受影响；叠层页一次手势只走一层。
-- **2026-11-16（加载体验优化第二轮）**：① Caveat 手写体子集化（51KB → **2.5KB**，只含 `0-9~`，渲染像素 diff 为 0，母版保留为 `caveat-600.source.woff2`）；② 预览缩略图从 JPEG 换 WebP 并增加 `*.w240.webp` 变体（`srcset` 240/320 + `sizes=120px` + `fetchpriority=low`，桌面缩略图单张约 5KB）；③ 预览首开渐进加载：先解码 `w1280` 再后台升级 `w2560`（最终仍显示 2560，画质不变），首页悬停预取同时预热两个变体，并把初始进入的「后 2 页」预取延后 900ms。4G 限速本地复测：预览打开 2.26s → **1.72s**（−24%），首次可见即 w1280、随后升级为 w2560；连续翻页 loading 遮罩仍为 0；全部 6 个项目缩略图请求均命中 WebP w240、无 404、无 JS 报错。
+- **2026-11-16（加载体验优化第二轮 / 封面清晰度修复）**：① Caveat 手写体子集化（51KB → **2.5KB**，只含 `0-9~`，渲染像素 diff 为 0，母版保留为 `caveat-600.source.woff2`）；② 预览缩略图从 JPEG 换 WebP 并增加 `*.w240.webp` 变体（`srcset` 240/320 + `sizes=120px` + `fetchpriority=low`，桌面缩略图单张约 5KB）；③ 修掉"首次加载完封面有点糊"：卡片是竖长裁切，旧 `sizes` 只看宽度导致浏览器选 w640 硬裁 16:9 大图；改为按卡片真实矩形选图——竖卡用新增的 `crop0.8.{720,960,1280}.webp` 竖版裁切变体（可见像素与原图一致，文件小 3–5 倍），宽卡仍用 16:9 变体。4G 限速与 8 视口复测：1440@2x 首页封面 315KB、项目页 589KB 且清晰（不裁切方案需 1.5MB/3MB）；全部视口无 404、无 JS 报错；此前尝试的"首图 w1280 渐进升级"因会让首屏显得糊已撤回，预览首图仍直接加载 2560，加载期间显示模糊遮罩。
 ### 6.5 复合媒体页基线
 
 - 查看器支持普通图片页与 `type: "composite"` 复合页共存；复合页由 16:9 背景、百分比定位的视频框和 PNG 图层组成，旧图片数据无需迁移。
