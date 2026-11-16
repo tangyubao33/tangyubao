@@ -2900,20 +2900,37 @@ const viewerElement = elements.screens.find((screen) => screen.dataset.screen ==
 let viewerWheelDelta = 0;
 let viewerWheelLock = 0;
 let viewerWheelTimer = 0;
+let viewerWheelLastAt = 0;
+let viewerWheelTurnAt = 0;
 viewerElement.addEventListener("wheel", (event) => {
   if (state.screen !== "viewer") return;
   if (event.ctrlKey || event.metaKey) return;
   if (event.target.closest(".thumbnail-rail") || event.target.closest(".other-projects")) return;
   event.preventDefault();
+  const now = performance.now();
+  const gap = now - viewerWheelLastAt;
+  viewerWheelLastAt = now;
+  // Mac trackpads keep emitting inertia events for up to ~2s after the fingers
+  // lift; turning once per event made a single swipe flip several pages. After
+  // a turn we ignore the rest of that continuous stream (events arrive every
+  // frame, gap < 60ms) and also wait for the 640ms slide, while still letting
+  // spaced-out mouse-wheel notches through.
+  if (viewerWheelTurnAt) {
+    if (now - viewerWheelTurnAt < 660) return;
+    // A short silence means the inertia tail ended and a new gesture began;
+    // otherwise keep swallowing the frames of the gesture that already turned.
+    if (gap < 60) return;
+    viewerWheelTurnAt = 0;
+  }
   const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaMode === 2 ? event.deltaY * window.innerHeight : event.deltaY;
   viewerWheelDelta += delta;
   window.clearTimeout(viewerWheelTimer);
   viewerWheelTimer = window.setTimeout(() => { viewerWheelDelta = 0; }, 200);
-  const now = performance.now();
-  if (now < viewerWheelLock || Math.abs(viewerWheelDelta) < 24) return;
+  if (now < viewerWheelLock || Math.abs(viewerWheelDelta) < 28) return;
   const direction = Math.sign(viewerWheelDelta);
   viewerWheelDelta = 0;
-  viewerWheelLock = now + 230;
+  viewerWheelLock = now + 660;
+  viewerWheelTurnAt = now;
   navigateViewer(direction, "wheel");
 }, { passive: false });
 
