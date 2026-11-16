@@ -379,4 +379,4 @@
 
 - **2026-11-16**：新增「网页打开成功率 + 加载性能」监控层：`index.html` 内联启动探针（boot_start/ready/fail，独立于 analytics.js）、`artwork_load`（作品图加载耗时，首屏/翻页分开）、Web Vitals 增补 FCP/load、资源失败聚合；`summary.js` 输出 `boot/artwork/resource_errors` 与 p75，看板新增对应板块、趋势与诊断规则。本地验收：正常打开 100% 成功、阻断 script.js 上报 script_error、图片首屏/翻页 p75 可读。
 
-- **2026-11-16**：新增访问地域监控（不存原始 IP）：Worker 采集 Cloudflare 边缘 `cf.country/region/city/continent`，D1 增加 `region/city/continent` 字段（`0002_geo` 迁移已应用），`summary` 输出 `geo`（国家/省州/城市，按会话去重），看板新增「访问地域」板块；README 隐私说明同步为「IP 仅用于边缘解析、不落库」。
+- **2026-11-16**：新增访问地域监控（不存原始 IP），提交 `5fbdf79`：Worker 采集 Cloudflare 边缘 `cf.country/region/city/continent`，D1 增加 `region/city/continent` 字段（`0002_geo` 迁移已应用），`summary` 输出 `geo`（国家/省州/城市，按会话去重），看板新增「访问地域」板块；README 隐私说明同步为「IP 仅用于边缘解析、不落库」。验收：测试请求被边缘识别为 `JP / Tokyo / Asagaya-minami`，看板国家/省州/城市与中文标签正常；旧数据只有 `country` 时省州显示「未知」，新事件才带完整地区。上线后已清空此前 1,361 条自动化测试事件（出口 IP 均为日本），真实访客从 0 开始积累；GitHub Pages 部署 `43843941498` 成功。
