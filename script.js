@@ -756,6 +756,7 @@ function setLastSlide(active) {
 
 const contactToggle = document.querySelector("[data-contact-toggle]");
 const contactCard = document.querySelector("[data-contact-card]");
+const contactBackdrop = document.querySelector("[data-contact-backdrop]");
 
 function contactFocusable() {
   return [...contactCard.querySelectorAll("a, button")].filter((element) => element.offsetParent !== null);
@@ -766,6 +767,8 @@ function setContactCard(open, restoreFocus = false) {
   const isOpen = contactCard.classList.contains("is-open");
   if (open === isOpen) return;
   contactCard.classList.toggle("is-open", open);
+  contactBackdrop?.classList.toggle("is-open", open);
+  document.body.classList.toggle("is-about-open", open);
   contactToggle.setAttribute("aria-expanded", String(open));
   if (open) {
     // the card fades in from visibility:hidden, so focus has to wait for the

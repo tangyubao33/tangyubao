@@ -8,7 +8,7 @@
   <title>唐尉保 · 产品设计作品集</title>
   <link rel="icon" href="唐尉保作品集2_files/favicon.ico">
   <style>html.is-booting [data-screen] { visibility: hidden; } html.is-booting body { background: #111214; }</style>
-  <link rel="stylesheet" href="styles.css?v=20261115c">
+  <link rel="stylesheet" href="styles.css?v=20261116a">
   <noscript><style>html.is-booting [data-screen] { visibility: visible; }</style></noscript>
 </head>
 <body>
@@ -35,24 +35,87 @@
         <a href="mailto:834316142@qq.com"><span>E-MAIL</span>834316142@qq.com</a>
       </div>
 
-      <button class="contact-link" type="button" data-contact-toggle aria-haspopup="dialog" aria-expanded="false" aria-label="打开联系方式名片">
-        <span>联系</span><i aria-hidden="true">↗</i>
+      <button class="contact-link" type="button" data-contact-toggle aria-haspopup="dialog" aria-expanded="false" aria-label="打开关于我">
+        <span>关于我</span><i aria-hidden="true">↗</i>
       </button>
     </header>
 
-    <div class="contact-card" data-contact-card role="dialog" aria-modal="true" aria-label="联系唐尉保">
-      <button class="contact-card-close" type="button" data-contact-close aria-label="关闭联系名片">×</button>
-      <div class="contact-card-head">
+    <div class="contact-backdrop" data-contact-backdrop aria-hidden="true"></div>
+    <div class="contact-card" data-contact-card role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <button class="contact-card-close" type="button" data-contact-close aria-label="关闭关于我">×</button>
+      <aside class="about-side">
         <img class="contact-card-avatar" src="assets/profile.webp" alt="唐尉保头像" width="192" height="192">
-        <div>
-          <p class="contact-card-name">唐尉保</p>
-          <p class="contact-card-role">UI/UX DESIGNER</p>
+        <p class="contact-card-name">唐尉保</p>
+        <p class="contact-card-role">UI/UX DESIGNER</p>
+        <p class="contact-card-meta">1992年，本科，字节跳动产品设计师</p>
+        <ul class="about-facts">
+          <li><span>经验</span><b>10 年 UI/UX 设计</b></li>
+          <li><span>方向</span><b>复杂产品 · 设计系统 · AI 体验</b></li>
+          <li><span>现职</span><b>抖音 · 平台产品设计专家</b></li>
+        </ul>
+        <div class="contact-card-links">
+          <a href="tel:+8618911300923"><span>TEL / 微信</span><b>18911300923</b></a>
+          <a href="mailto:834316142@qq.com"><span>E-MAIL</span><b>834316142@qq.com</b></a>
         </div>
-      </div>
-      <p class="contact-card-meta">1992年，本科，字节跳动产品设计师</p>
-      <div class="contact-card-links">
-        <a href="tel:+8618911300923"><span>TEL / 微信</span><b>18911300923</b></a>
-        <a href="mailto:834316142@qq.com"><span>E-MAIL</span><b>834316142@qq.com</b></a>
+      </aside>
+
+      <div class="about-main">
+        <p class="about-kicker">About</p>
+        <h2 class="about-title" id="about-title">关于我</h2>
+
+        <section class="about-section">
+          <p class="about-label">自我介绍</p>
+          <p class="about-lead">具备 10 年 UI/UX 与设计经验，擅长在复杂业务场景中把用户需求、业务目标与数据反馈转化为清晰可落地的体验方案。兼具产品设计、设计系统建设、项目推进与小组管理能力，能够从策略制定、方案落地到上线复盘，持续提升产品体验与团队交付效率，兼顾设计执行与项目管理能力的平衡。</p>
+          <p><b>复杂产品与全链路体验设计：</b>擅长多角色、多任务、强数据和长流程场景的信息架构、交互设计与视觉表达；能够独立完成从需求洞察、体验策略、原型设计到设计交付和效果复盘的完整闭环。</p>
+          <p><b>体系化建设与 AI 设计能力：</b>具备设计系统与设计流程建设经验，能够将项目中的共性问题沉淀为可复用的标准和工具，理解 AI 产品的交互特点与工作流。探索 AI 对工作流程的应用，具备 Vibe Coding 端到端实践经验，并逐步向 AI Agent 方向转型。</p>
+          <p><b>项目推动与团队管理能力：</b>具备重点项目、小组管理与跨团队协同经验，能够进行目标对齐、任务拆解、资源协调、设计评审与质量把控；关注成员成长与团队能力建设，保障复杂项目高质量、按节奏落地。</p>
+        </section>
+
+        <section class="about-section about-experience">
+          <p class="about-label">项目经历</p>
+
+          <article class="about-job">
+            <p class="about-job-period">2016.03 ~ 2020.03<span>高级UI设计师</span></p>
+            <div class="about-job-company">
+              <img src="assets/marks/kingsoft.webp" alt="" width="38" height="38" loading="lazy">
+              <h3>金山办公 / UED</h3>
+            </div>
+            <p class="about-job-line">活动运营设计：WPS office 会员增值业务</p>
+            <p class="about-job-line">TO C 端产品体验设计：金山词霸、WPS精品课、小米邮箱</p>
+          </article>
+
+          <article class="about-job">
+            <p class="about-job-period">2020.03 ~ 2022.09<span>资深体验设计师</span></p>
+            <div class="about-job-company">
+              <img src="assets/marks/jd.webp" alt="" width="38" height="38" loading="lazy">
+              <h3>京东零售 / 技术与数据中心 / JTD</h3>
+            </div>
+            <p class="about-job-line">TO B 端数据产品体验设计：京东数坊营销数据平台、黄金眼数据平台</p>
+            <p class="about-duty-label">主要职责</p>
+            <ol class="about-duties">
+              <li><b>01</b><span>负责 B 端中台营销数据产品的 UI/UX 设计工作，并把控整体设计质量</span></li>
+              <li><b>02</b><span>协同产品深入业务，为业务提供产品体验的整体设计方案，并梳理产品逻辑，推动设计进程，保障产出质量还原设计成果，持续跟踪体验数据变化，及时发现问题做出优化调整</span></li>
+              <li><b>03</b><span>沉淀设计经验和方法，协同小伙伴共同制定体验设计规范与设计体系建设</span></li>
+              <li><b>04</b><span>完善设计工具的打磨，完成符合数据产品特性的设计资产沉淀</span></li>
+            </ol>
+          </article>
+
+          <article class="about-job">
+            <p class="about-job-period">2022.09 ~ NOW<span>平台产品设计专家</span></p>
+            <div class="about-job-company">
+              <img src="assets/marks/douyin.webp" alt="" width="38" height="38" loading="lazy">
+              <h3>抖音 / UED / 增长中心-平台</h3>
+            </div>
+            <p class="about-job-line">TOB&amp;C端平台产品体验设计：抖音创作服务平台、抖音分成平台、抖音精选</p>
+            <p class="about-duty-label">主要职责</p>
+            <ol class="about-duties">
+              <li><b>01</b><span>负责重点项目的需求拆解：负责多个抖音创作服务平台 S 级需求提案，跨团队协同与上线复盘，通过用户反馈、体验指标和业务数据持续优化产品体验。</span></li>
+              <li><b>02</b><span>主导 AI 创作能力的产品体验设计：包括 AI 封面、创作辅助、诊断与引导式任务流程，推动模型能力转化为用户可理解、可使用的创作工具。</span></li>
+              <li><b>03</b><span>建设和维护平台设计系统：包括视觉语言、组件规范、图表规范、交互模式及体验问题池，提升多业务协作下的一致性与交付效率。并注重 AI 在实际工作流程中的应用，有效提升产设研协作效率。</span></li>
+              <li><b>04</b><span>负责创作小组与项目管理：包括任务分配、设计评审、质量把控、成员辅导及协作流程优化。发起抖音创作服务平台体验升级，综合评估业务目标、用户体验、成本难度，合理制定目标，协同多个业务线、职能，共同合作顺利完成项目目标。</span></li>
+            </ol>
+          </article>
+        </section>
       </div>
     </div>
 
@@ -158,6 +221,6 @@
 
 
   <noscript>请启用 JavaScript 以浏览交互式作品集。</noscript>
-  <script src="script.js?v=20261115c" defer></script>
+  <script src="script.js?v=20261116a" defer></script>
 </body>
 </html>
