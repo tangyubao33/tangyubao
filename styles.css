@@ -737,6 +737,10 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
 .stream-project.is-returning::after { opacity: .76 !important; }
 .stream-project img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: contrast(1.12) brightness(.68); transform: scale(1.08) translateX(var(--pointer-shift)); transition: filter .65s, transform 1s var(--ease); }
 .stream-project.is-expanded img, .stream-project:focus-visible img { filter: contrast(1.04) brightness(.88); transform: scale(1.01) translateX(0); }
+/* Full 16:9 cover for the expanded hover state, cross-faded in on top of the
+   resting portrait crop so switching sources never blanks the card. */
+.stream-project .cover-expanded { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; filter: contrast(1.04) brightness(.88); transform: scale(1.01); transition: opacity .2s linear, filter .65s, transform 1s var(--ease); }
+.stream-project.is-cover-expanded .cover-expanded { opacity: 1; }
 .stream-project::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(8,9,10,.94), transparent 58%), linear-gradient(to top, rgba(8,9,10,.62), transparent 32%); opacity: .76; transition: opacity .55s; }
 .stream-project.is-expanded::after, .stream-project:focus-visible::after { opacity: .38; }
 .stream-project-top { position: absolute; z-index: 2; bottom: 13px; left: 13px; right: 13px; display: flex; justify-content: space-between; color: rgba(255,255,255,.68); }
@@ -784,25 +788,27 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   .header-contact a { gap: 5px; font-size: 9px; letter-spacing: .03em; }
   .header-contact span { font-size: 8px; letter-spacing: .08em; }
 
-  .home-heading { height: 25%; min-height: 138px; }
+  .home-heading { --home-type: clamp(14.8px, 4.6vw, 21px); height: 25%; min-height: 138px; }
   .home-heading { padding-left: 20px; padding-right: 20px; }
-  .home-heading h1 { --title-size: clamp(14.8px, 4.6vw, 21px); font-size: var(--title-size); white-space: nowrap; }
+  .home-heading h1 { --title-size: var(--home-type); font-size: var(--home-type); white-space: nowrap; }
   .home-heading-main { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
-  /* 手机端首页标题、简介、个人信息统一左对齐（桌面端仍保持右侧信息栏） */
+  /* 手机端首页标题、简介、个人信息统一左对齐（桌面端仍保持右侧信息栏）；
+     字号用同一个 --home-type 派生，缩放比例始终一致 */
   .home-profile { align-self: stretch; align-items: flex-start; gap: 8px; padding-top: 0; }
   .profile { align-items: flex-start; text-align: left; }
+  .profile-top { justify-content: flex-start; }
+  .profile-avatar { order: -1; }
   .profile-info { justify-items: start; }
-  .profile-name { justify-content: flex-start; }
-  .profile-role { text-align: left; }
-  .portfolio-cn { text-align: left; }
+  .profile-name { justify-content: flex-start; font-size: clamp(11px, calc(var(--home-type) * .72), 15px); }
+  .profile-name em { font-size: clamp(11px, calc(var(--home-type) * .72), 15px); }
+  .profile-role { text-align: left; font-size: clamp(10px, calc(var(--home-type) * .6), 13px); }
+  .portfolio-cn { text-align: left; font-size: clamp(11px, calc(var(--home-type) * .72), 15px); }
   .home-heading .portfolio-title { gap: 3px; line-height: 1; }
-  .portfolio-cn { font-size: 13px; }
   .portfolio-years { font-size: clamp(12px, 4.1vw, 16px); text-shadow: none; }
   .profile { right: 20px; bottom: 6px; gap: 7px; }
   .profile-top { gap: 10px; }
-  .profile-name { font-size: 13px; gap: 6px; }
-  .profile-name em { font-size: 13px; letter-spacing: .06em; }
-  .profile-role { font-size: 11px; }
+  .profile-name { gap: 6px; }
+  .profile-name em { letter-spacing: .06em; }
   .work-stream-shell { height: calc(75% - 44px); padding: 0 20px 28px; }
   .experience-group { grid-template-rows: minmax(0, 1fr) auto; padding: 0 28px; }
   .group-meta { gap: 9px; max-width: calc(100vw - 40px); }
