@@ -806,7 +806,10 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   .profile-top { gap: 10px; }
   .profile-name { gap: 6px; }
   .profile-name em { letter-spacing: .06em; }
-  .work-stream-shell { height: calc(75% - 44px); padding: 0 20px 28px; }
+  /* Keep the cover height continuous when crossing the 760px mobile breakpoint.
+     The compact mobile meta row is ~5px shorter than desktop, so its stream
+     shell also needs a slightly smaller baseline instead of the old 75vh rule. */
+  .work-stream-shell { height: calc(73% - 47px); padding: 0 20px 30px; }
   .experience-group { grid-template-rows: minmax(0, 1fr) auto; padding: 0 28px; }
   .group-meta { gap: 9px; max-width: calc(100vw - 40px); }
   .group-divider { height: 30px; }
