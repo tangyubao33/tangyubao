@@ -134,9 +134,8 @@ body[data-screen="viewer"] .site-header { grid-template-columns: auto minmax(0, 
 .about-side::-webkit-scrollbar, .about-main::-webkit-scrollbar { width: 8px; height: 8px; }
 .about-side::-webkit-scrollbar-track, .about-main::-webkit-scrollbar-track { background: transparent; }
 .about-side::-webkit-scrollbar-thumb, .about-main::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: transparent; background-clip: padding-box; }
-.contact-card:hover .about-side, .contact-card:hover .about-main, .contact-card:focus-within .about-side, .contact-card:focus-within .about-main { scrollbar-color: rgba(255, 255, 255, .28) transparent; }
-.contact-card:hover .about-side::-webkit-scrollbar-thumb, .contact-card:hover .about-main::-webkit-scrollbar-thumb,
-.contact-card:focus-within .about-side::-webkit-scrollbar-thumb, .contact-card:focus-within .about-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .26); background-clip: padding-box; }
+.contact-card:hover .about-side, .contact-card:hover .about-main { scrollbar-color: rgba(255, 255, 255, .28) transparent; }
+.contact-card:hover .about-side::-webkit-scrollbar-thumb, .contact-card:hover .about-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .26); background-clip: padding-box; }
 
 .about-side { --about-side-gap: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--about-side-gap); padding: 34px 26px 26px; overflow-y: auto; overscroll-behavior: contain; border-right: 1px solid rgba(255, 255, 255, .09); background: linear-gradient(180deg, rgba(24, 29, 37, .72), rgba(13, 16, 20, .5)); }
 .contact-card-avatar { width: 74px; height: 74px; object-fit: cover; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .18); }
