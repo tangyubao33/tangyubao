@@ -575,7 +575,21 @@
   }
 
   function authToken() {
-    try { return sessionStorage.getItem("pf_dash_token") || ""; } catch (error) { return ""; }
+    // ?token=… is convenient for a local/bookmarked board but ends up in the
+    // address bar and Referer, so the UI keeps it in sessionStorage after the
+    // first load and the docs warn against sharing such a URL.
+    var fromQuery = params.get("token") || "";
+    try {
+      var stored = sessionStorage.getItem("pf_dash_token");
+      if (stored) return stored;
+      if (fromQuery) {
+        sessionStorage.setItem("pf_dash_token", fromQuery);
+        return fromQuery;
+      }
+    } catch (error) {
+      return fromQuery;
+    }
+    return "";
   }
   function storeToken(token) {
     try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* ignore */ }

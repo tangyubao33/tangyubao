@@ -218,6 +218,15 @@
 - **缩略图**：直接使用封底的 320×180 缩略图，与大图一致。
 - **末页「其他项目」面板**：只在最后一页（封底）出现；面板 / 作品框的尺寸变化等 640ms 翻页动画结束后再做（见 §3.6 最后一页避让）。
 
+### 3.13 埋点与数据看板
+
+- **定位**：站点仍纯静态、零依赖、无构建；`analytics.js` 是唯一新增运行时文件，`analytics/` 是独立数据层。埋点调用都经 `track()` 空值保护，analytics.js 被拦截/失败不影响页面；不得为埋点引入第三方 SDK。
+- **口径**：会话 30 分钟无操作即新会话；查看器以 `viewer_id` 的「打开→离开」为单位聚合页面深度/停留/跳出；曝光 = 卡片 ≥50% 可见 500ms 且每页加载去重；简历下载记录的是点击意图。完整事件表见 `analytics/README.md §3`。
+- **隐私**：无 Cookie、不存 IP/UA/指纹/输入内容、不接第三方；仅匿名 `vid`/`sid`/白名单 props；DNT/GPC 默认关闭；保留 180 天。看板令牌只走 Authorization/sessionStorage，禁止写入公开链接或仓库。
+- **本地隔离**：`file://` 与 `localhost` 默认不启用（不发请求、不写队列），避免站主调试污染线上；自动化验收用 `?analytics_endpoint=<collector>` 显式开启。改 `analytics.js`/`script.js` 时同步提升 `?v=`。
+- **数据端**：`analytics/summary.js` 是唯一聚合实现（Worker/本地共用），看板只读 `/api/summary` 的 `{current, previous}`；新增作品同步 `PROJECTS` 注册表。改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序执行并跑 `node analytics/tools/verify-summary.mjs`。
+- **运维**：`cd analytics/worker && wrangler deploy`；D1 备份 `wrangler d1 export`；删访客数据 `DELETE FROM events WHERE vid=…`；保留策略由 cron 清理；`workers.dev` 国内不稳时绑定自定义域名。
+
 ## 4. 工作流规则（每次改动必须执行）
 
 1. 启动本地预览（8099），在基准视口逐一看：1920×1080、1440×900、1280×800、1024×768、768×1024、390×844、320×568、844×390。
@@ -246,8 +255,8 @@
 - `assets/demo/ppt-demo.png` + `assets/slide-thumbs/demo-01.jpg` 保留为 `.qa/media/compose.html` 的默认测试素材，不在站点里引用。
 - 占位项目（抖音分成 / 抖音精选 / 黄金眼 / 小米邮箱 / WPS Office）已从数据里移除；`disabled` 兜底与未知项目回退逻辑保留，`#project/douyin/douyin-revenue` 现在回退到该项目导航页。
 - PNG 图层已在代码与编辑器里跑通，但**还没接过真实的分层 PPT**；真实 `.pptx` 到手后先用 `.qa/media/pptx2layers.py` 对一遍坐标再入库。
-- 埋点 endpoint 尚未配置：`index.html` 的 meta 占位仍是注释、`analytics.js` 的 `ANALYTICS_ENDPOINT` 为空，线上当前**不会上报**；按 `analytics/README.md §4` 部署 Worker 后填一处即可。
-- Cloudflare Worker/D1 尚未实际部署过（本地 collector 与 mock D1 已跑通路由与聚合）；首次部署后要按 README 的验收清单核对 `/health`、`/collect`、`/api/summary`。
+- 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）。
+- 看板令牌不写入仓库，本机保存在 `analytics/local/.data/dashboard-token.txt`（已 gitignore）；本地 `file://` / `localhost` 预览默认不上报，需显式加 `?analytics_endpoint=…`（或 `?analytics_force=1`）才会走线上 collector。
 - `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
 - 看板首屏性能建议（来自 2026-11-16 实测）：桌面首载约 2.9 MB / 图片 2.6 MB，移动 2.1 MB / 图片 1.8 MB，主要来自 6 张 3200×1800 封面；`loading="lazy"` 会提前加载多张。建议后续补 640/960/1280/1920 的封面 `srcset`（AVIF/WebP）并只预加载首张，具体见 `analytics/体验分析报告.md §5 P0-1`。
 - 埋点口径的已知局限（下载点击≠保存成功、DNT 不上报、无跨设备、会话 30 分钟上限、封底页计入总页数等）集中写在 `analytics/体验分析报告.md §7`，对外解释数据时以此为准。
@@ -348,6 +357,8 @@
 
 ### 6.8 埋点与数据看板基线
 
-- **2026-11-16**：新增完整埋点与看板体系，站点本身仍是纯静态、零依赖：`analytics.js` 采集器 + `analytics/`（共享聚合 `summary.js`、本地 collector、Cloudflare Worker + D1、自包含看板、示例数据与回归工具、部署文档、体验分析报告）。触发点覆盖首页曝光/封面曝光/作品点击、查看器打开/逐页/退出、关于我打开/折叠、简历下载、联系方式点击、全屏/视频/热区链接，并采集 Web Vitals、首屏资源体积与 JS/资源错误。选择自建 Worker + D1 而不是第三方原因：国内可访问（支持自定义域名）、原始事件自己掌控、能算逐页到达/漏斗、无 Cookie 与第三方脚本。**当前 endpoint 未配置，线上暂不上报**；部署步骤见 `analytics/README.md §4`，使用说明与数据契约见同文，体验结论与优化优先级见 `analytics/体验分析报告.md`。
+- **2026-11-16**：新增完整埋点与看板体系，站点本身仍是纯静态、零依赖：`analytics.js` 采集器 + `analytics/`（共享聚合 `summary.js`、本地 collector、Cloudflare Worker + D1、自包含看板、示例数据与回归工具、部署文档、体验分析报告）。触发点覆盖首页曝光/封面曝光/作品点击、查看器打开/逐页/退出、关于我打开/折叠、简历下载、联系方式点击、全屏/视频/热区链接，并采集 Web Vitals、首屏资源体积与 JS/资源错误。选择自建 Worker + D1 而不是第三方原因：国内可访问（支持自定义域名）、原始事件自己掌控、能算逐页到达/漏斗、无 Cookie 与第三方脚本。**2026-11-16 已配置 endpoint 并部署 Worker（见 §5）**；部署步骤见 `analytics/README.md §4`，使用说明与数据契约见同文，体验结论与优化优先级见 `analytics/体验分析报告.md`。
 - **2026-11-16**：验收范围——本地 collector 端到端（Chrome 驱动真实交互：首页曝光→点击→键盘/缩略图翻页→关于我→下载→返回，事件全部落库）、8 个基准视口无 JS 报错/横向溢出/卡片裁切、analytics.js 被拦截时站点正常、DNT 关闭采集、`file://` 双击打开站点与看板正常、Worker 路由与鉴权用 mock D1 验证、聚合不变量 26 项通过。实测首屏：桌面 2.9 MB（图片 2.6 MB）、移动 2.1 MB（图片 1.8 MB），作为后续封面响应式优化的基线。
 - 维护约定：新增/修改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序改，并提升 `script.js`/`analytics.js` 的 `?v=`；新增作品同步 `summary.js` 的 `PROJECTS`；看板令牌、D1 备份/删除/保留策略见 `analytics/README.md §7`。
+
+- **2026-11-16**：Cloudflare Worker + D1 实际部署完成（`tangyubao-analytics.tangweibao.workers.dev`，D1 `tangyubao-analytics` / `422352f9-91df-44b9-bbd8-f62df30dedf8`），`DASHBOARD_TOKEN` 用 secret 写入；`index.html` meta 切到线上 collector，看板支持 `?token=` 并转存 sessionStorage。同时给 `analytics.js` 加本地预览隔离（`file://`/localhost 默认不上报，需 `?analytics_endpoint=` 才上报）。验收：`/health` 200、`/collect` 收事件、`/api/summary` 需 Bearer、测试事件清理后归零。

@@ -8,8 +8,9 @@
   <title>唐尉保 · 产品设计作品集</title>
   <link rel="icon" href="唐尉保作品集2_files/favicon.ico">
   <style>html.is-booting [data-screen] { visibility: hidden; } html.is-booting body { background: #111214; }</style>
-  <!-- 埋点上报地址：部署 Cloudflare Worker 后取消注释并填入地址（见 analytics/README.md） -->
-  <!-- <meta name="portfolio-analytics-endpoint" content="https://<worker-name>.<account>.workers.dev/collect"> -->
+  <!-- 埋点上报地址（Cloudflare Worker + D1，部署见 analytics/README.md）。
+       本地 file:// / localhost 预览默认不上报，只有显式传 ?analytics_endpoint= 时才会上报。 -->
+  <meta name="portfolio-analytics-endpoint" content="https://tangyubao-analytics.tangweibao.workers.dev/collect">
   <link rel="stylesheet" href="styles.css?v=20261116n">
   <noscript><style>html.is-booting [data-screen] { visibility: visible; }</style></noscript>
 </head>
@@ -257,7 +258,7 @@
 
 
   <noscript>请启用 JavaScript 以浏览交互式作品集。</noscript>
-  <script src="analytics.js?v=20261116n" defer></script>
+  <script src="analytics.js?v=20261116o" defer></script>
   <script src="script.js?v=20261116n" defer></script>
 </body>
 </html>

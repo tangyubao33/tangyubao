@@ -75,12 +75,17 @@
   var gpc = navigator.globalPrivacyControl === true;
   var enabled = force || (!(defaults.respectDNT && (dnt || gpc)));
 
+  // Local previews (double-click file://, python -m http.server, etc.) must not
+  // mix the owner's own visits into production data. They only report when an
+  // endpoint is injected explicitly (QA) or analytics_force=1 is set.
+  var previewOnly = isLocalHost && !param("analytics_endpoint");
+
   var sampleRate = Number(param("analytics_sample"));
   if (!isFinite(sampleRate) || sampleRate <= 0 || sampleRate > 1) sampleRate = defaults.sampleRate;
   var sampledIn = Math.random() <= sampleRate;
 
   var prefix = defaults.storagePrefix;
-  var active = enabled && sampledIn;
+  var active = enabled && sampledIn && (!previewOnly || force);
 
   /* ---------------------------------------------------------------- storage */
 
