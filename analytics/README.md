@@ -159,13 +159,19 @@ curl -s 'https://<worker>/api/summary?days=7&token=<DASHBOARD_TOKEN>' | head -c 
 
 ### 4.2 看板怎么连线上数据
 
-把 `analytics/dashboard.html` 放在自己电脑或任意静态托管上，用 `?api=` 指向 Worker：
+看板默认已指向本项目部署的 Worker（`dashboard.html` 内的 `DEFAULT_API`），所以**直接打开就是实时数据**：
 
 ```
-dashboard.html?api=https://<worker>
+https://tangyubao33.github.io/tangyubao/analytics/dashboard.html
 ```
 
-首次会提示输入 `DASHBOARD_TOKEN`，存在 `sessionStorage`，刷新页面（同标签页）无需再输。也可以直接 `?api=https://<worker>&token=...`，但不建议把令牌放在可分享链接里。
+首次会提示输入 `DASHBOARD_TOKEN`，存在 `sessionStorage`，同一标签页刷新无需再输。手机/新浏览器可以收藏带令牌的一次性链接：
+
+```
+https://tangyubao33.github.io/tangyubao/analytics/dashboard.html#token=<DASHBOARD_TOKEN>
+```
+
+`#` 后面的内容不会出现在 Referer 里，但会留在地址栏/浏览器历史，**只当作个人书签使用，不要公开分享**。`?api=https://<worker>` 仍可覆盖默认地址（用于其他 Worker 实例），`?demo=1` 查看内置示例数据。
 
 看板支持：7/14/30/90 天切换、刷新、导出 CSV、点击项目查看逐页到达率、点击图例切换趋势指标、自动体验诊断。
 
@@ -303,7 +309,7 @@ npx wrangler@4 secret put DASHBOARD_TOKEN
 | 现象 | 排查 |
 |---|---|
 | 线上看板一直「示例数据」 | `?api=` 地址是否带协议；Worker 是否部署；控制台是否有 CORS/网络错误；换个网络试 `workers.dev` |
-| 看板提示需要令牌 / 401 | 输入 `DASHBOARD_TOKEN`；或 URL 加 `&token=...`；确认 `wrangler secret` 已生效（重新 deploy 不必，secret 立即生效） |
+| 看板提示需要令牌 / 401 | 输入 `DASHBOARD_TOKEN`；或用 `#token=...` 打开；确认 `wrangler secret` 已生效（重新 deploy 不必，secret 立即生效） |
 | 有访问但没有事件 | 打开站点控制台看 `[analytics]` 日志；确认 meta/`ANALYTICS_ENDPOINT` 已填；DNT 是否开启；`/health` 是否 200 |
 | 事件有重复 | 客户端每个事件有唯一 `id`，服务端 `INSERT OR IGNORE` 去重；看聚合按 `id` 去重 |
 | 点击/曝光数对不上 | 曝光有 50%+500ms 门槛；快速划过不计；深链打开作品不产生曝光 |

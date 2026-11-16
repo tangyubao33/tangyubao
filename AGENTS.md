@@ -362,4 +362,5 @@
 - **2026-11-16**：验收范围——本地 collector 端到端（Chrome 驱动真实交互：首页曝光→点击→键盘/缩略图翻页→关于我→下载→返回，事件全部落库）、8 个基准视口无 JS 报错/横向溢出/卡片裁切、analytics.js 被拦截时站点正常、DNT 关闭采集、`file://` 双击打开站点与看板正常、Worker 路由与鉴权用 mock D1 验证、聚合不变量 26 项通过。实测首屏：桌面 2.9 MB（图片 2.6 MB）、移动 2.1 MB（图片 1.8 MB），作为后续封面响应式优化的基线。
 - 维护约定：新增/修改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序改，并提升 `script.js`/`analytics.js` 的 `?v=`；新增作品同步 `summary.js` 的 `PROJECTS`；看板令牌、D1 备份/删除/保留策略见 `analytics/README.md §7`。
 
+- **2026-11-16**：看板改为默认直连线上 Worker（`DEFAULT_API`），并支持 `#token=…` 单地址访问（hash 不随 Referer 发送）；`?api=` 仍可覆盖、`?demo=1` 仍为示例数据。手机/新浏览器用一个收藏链接即可直接看数据，令牌只留在地址栏和历史中，不写入仓库。
 - **2026-11-16**：Cloudflare Worker + D1 实际部署完成（`tangyubao-analytics.tangweibao.workers.dev`，D1 `tangyubao-analytics` / `422352f9-91df-44b9-bbd8-f62df30dedf8`），`DASHBOARD_TOKEN` 用 secret 写入；`index.html` meta 切到线上 collector，看板支持 `?token=` 并转存 sessionStorage。同时给 `analytics.js` 加本地预览隔离（`file://`/localhost 默认不上报，需 `?analytics_endpoint=` 才上报）。验收：`/health` 200、`/collect` 收事件、`/api/summary` 需 Bearer、测试事件清理后归零。

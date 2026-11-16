@@ -423,10 +423,17 @@
   "use strict";
 
   var params = new URLSearchParams(location.search);
-  var API_PARAM = params.get("api");
+  // The token may also travel in the fragment (dashboard.html#token=…), which
+  // browsers never send in the Referer. The fragment still lands in the
+  // address bar / history, so it is a personal bookmark rather than a share link.
+  var hashParams = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+  var API_PARAM = params.get("api") || hashParams.get("api");
   var IS_HTTP = location.protocol === "http:" || location.protocol === "https:";
-  var REMOTE_BASE = API_PARAM !== null ? API_PARAM.replace(/\/$/, "") : (IS_HTTP ? "" : null);
-  var FORCE_DEMO = params.get("demo") === "1";
+  // Opening dashboard.html directly (Pages, local file, or any host) now talks
+  // to the deployed collector; ?api=… still overrides it for other instances.
+  var DEFAULT_API = "https://tangyubao-analytics.tangweibao.workers.dev";
+  var REMOTE_BASE = API_PARAM !== null ? API_PARAM.replace(/\/$/, "") : DEFAULT_API;
+  var FORCE_DEMO = params.get("demo") === "1" || hashParams.get("demo") === "1";
 
   var state = {
     days: 30,
@@ -563,7 +570,7 @@
   function applyDemo(message, isError) {
     if (!window.SAMPLE_SUMMARY) {
       setNotice("没有找到示例数据（analytics/sample-summary.js）。请先运行 <code>node analytics/tools/make-sample.mjs</code>，或给看板加 ?api= 指向 Collector。", true);
-      els.loading.innerHTML = "<span>没有数据源</span>";
+      els.loading.innerHTML = "<span>没有数据源（检查 Worker 或 ?api= 地址）</span>";
       return false;
     }
     state.demo = true;
@@ -575,21 +582,20 @@
   }
 
   function authToken() {
-    // ?token=… is convenient for a local/bookmarked board but ends up in the
-    // address bar and Referer, so the UI keeps it in sessionStorage after the
-    // first load and the docs warn against sharing such a URL.
+    // Priority: explicit ?token= / #token= (lets a bookmarked one-click URL
+    // override an old token) → sessionStorage from a previous entry.
+    var fromHash = hashParams.get("token") || "";
     var fromQuery = params.get("token") || "";
+    var candidate = fromHash || fromQuery;
     try {
-      var stored = sessionStorage.getItem("pf_dash_token");
-      if (stored) return stored;
-      if (fromQuery) {
-        sessionStorage.setItem("pf_dash_token", fromQuery);
-        return fromQuery;
+      if (candidate) {
+        sessionStorage.setItem("pf_dash_token", candidate);
+        return candidate;
       }
+      return sessionStorage.getItem("pf_dash_token") || "";
     } catch (error) {
-      return fromQuery;
+      return candidate;
     }
-    return "";
   }
   function storeToken(token) {
     try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* ignore */ }
@@ -622,7 +628,7 @@
     els.sourceBadge.className = "badge";
     els.sourceBadge.textContent = "连接中…";
 
-    var remote = REMOTE_BASE !== null && !FORCE_DEMO;
+    var remote = Boolean(REMOTE_BASE) && !FORCE_DEMO;
     if (remote) {
       try {
         var data = await fetchRemote(state.days);
@@ -635,7 +641,7 @@
         applyDemo("无法连接实时数据源：" + (error.message || error) + "。", true);
       }
     } else {
-      applyDemo(FORCE_DEMO || IS_HTTP ? "" : "当前以文件方式打开，没有数据接口。");
+      applyDemo("");
     }
 
     if (!state.data) {
