@@ -985,3 +985,13 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   border-bottom: 1px solid rgba(255, 255, 255, .16);
   transform: rotate(45deg);
 }
+
+/* Image protection (casual saving): no long-press "save image" callout on iOS,
+   no native drag ghost, no accidental image text selection. Screenshots and
+   devtools cannot be blocked, but right-click / long-press saving is removed. */
+img, video {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}

@@ -777,6 +777,23 @@ elements.viewerScreen.addEventListener("contextmenu", (event) => {
   if (viewerPageTarget(event)) navigateViewer(-1, "click");
 });
 
+/* Casual image saving is blocked: no context menu / drag on artwork, cards,
+   thumbnails or video frames. This cannot stop screenshots or devtools, but it
+   removes the obvious right-click / long-press "save image" path. The fullscreen
+   right-click page-turn above still runs before this handler and is unaffected. */
+const protectedImageTarget = (event) =>
+  event.target instanceof Element
+    ? event.target.closest("img, video, .artwork-frame, .stream-project, .project-card, .other-project, .media-box, .thumbnail")
+    : null;
+
+document.addEventListener("contextmenu", (event) => {
+  if (protectedImageTarget(event)) event.preventDefault();
+});
+
+document.addEventListener("dragstart", (event) => {
+  if (event.target instanceof Element && event.target.closest("img, video")) event.preventDefault();
+});
+
 document.addEventListener("pointermove", wakeFullscreenUI, { passive: true });
 document.addEventListener("touchstart", wakeFullscreenUI, { passive: true });
 document.addEventListener("keydown", wakeFullscreenUI);
@@ -1695,13 +1712,24 @@ function playNextSlideMedia() {
   startMedia(box, overlay, { auto: true });
 }
 
+function controlsMayHide(box) {
+  const video = box.querySelector("video");
+  // While a muted video still has an unmute button there is an action the
+  // visitor needs, so the bar stays visible; silent recordings and unmuted
+  // videos behave like a normal auto-hiding player. The hover check keeps the
+  // bar available while the mouse rests on the frame.
+  if (!video) return false;
+  if (video.muted && box.querySelector(".media-mute")) return false;
+  return !box.matches(":hover");
+}
+
 function showControls(box) {
   const bar = box.querySelector(".media-controls");
   if (!bar) return;
   bar.classList.add("is-visible");
   window.clearTimeout(box._controlsTimer);
   box._controlsTimer = window.setTimeout(() => {
-    if (box.dataset.playing === "true") bar.classList.remove("is-visible");
+    if (box.dataset.playing === "true" && controlsMayHide(box)) bar.classList.remove("is-visible");
   }, 2600);
 }
 
@@ -1711,7 +1739,9 @@ function revealControls(box) {
   bar.classList.add("is-visible");
   window.clearTimeout(box._controlsTimer);
   if (box.dataset.playing === "true") {
-    box._controlsTimer = window.setTimeout(() => bar.classList.remove("is-visible"), 2600);
+    box._controlsTimer = window.setTimeout(() => {
+      if (controlsMayHide(box)) bar.classList.remove("is-visible");
+    }, 2600);
   }
 }
 
@@ -1785,6 +1815,13 @@ function toggleMute(box) {
   if (!video) return;
   video.muted = !video.muted;
   mediaState.soundOn = !video.muted;
+  if (!video.muted) {
+    video.volume = 1;
+    // Some WebKit / WeChat builds keep an autoplay-muted video silent until a
+    // play() call happens inside the same gesture, even while it is playing.
+    if (!video.paused) video.play().catch(() => {});
+    revealControls(box);
+  }
 }
 
 function seekFromEvent(box, progress, event) {
@@ -1857,11 +1894,18 @@ function buildMediaControls(box, overlay) {
   bar.addEventListener("pointerdown", (event) => event.stopPropagation());
   bar.addEventListener("click", (event) => event.stopPropagation());
 
-  // clicking the picture itself toggles playback once the demo has started
+  // clicking the picture itself toggles playback once the demo has started;
+  // a click on the (possibly hidden) bottom control strip just brings the bar
+  // back, so tapping where the mute button lives never pauses the video first
   box.addEventListener("click", (event) => {
     if (event.target instanceof Element && event.target.closest(".media-controls, .media-play")) return;
     const video = box.querySelector("video");
     if (!video) return;
+    const rect = box.getBoundingClientRect();
+    if (event.clientY >= rect.bottom - 56) {
+      revealControls(box);
+      return;
+    }
     toggleMedia(box);
   });
   // keep the bar on screen while the pointer moves over the frame
