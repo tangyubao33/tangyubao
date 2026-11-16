@@ -54,6 +54,7 @@
 - 卡片呈现与京东零售封面一致：`object-fit: cover` 居中裁切；首页卡与项目页卡比例差异较大（首页卡约 0.59、横屏 1.31、项目页最窄约 0.25），保证封面中心内容落在裁切安全区。
 - **首页封面卡宽度在 2026-11-13 增加 20%**：桌面 `clamp(210px, 18vw, 324px)`（原 175/15vw/270）；手机 `74.4vw`、上限 324px；横屏 `clamp(180px, 26.4vw, 264px)`。加宽后卡片横向比例更大，封面能露出更多横向内容。
 - 换封面时替换对应 `assets/thumbs/*.jpg` 即可；**当前封面同时作为作品第 1 页**（`slides[0]` 使用 `project.cover`，第一张缩略图也用封面重生成），后续内页保持原图、顺序与封面独立。
+- **卡片封面走响应式图片（2026-11-16）**：`assets/thumbs/*` 除 3200×1800 JPEG 母版外新增 **640 宽 WebP**（w640），卡片 `<img>` 使用 `srcset`（640/960/1280/1920/2560）+ `sizes` 按卡片实际显示宽度选档，`decoding=async`；首页第一张封面额外 `fetchpriority=high` 并在 index.html 里 `preload`（`imagesrcset`/`imagesizes`），避免 JS 渲染卡片前发现不了首图。悬停卡片 150ms 后预取该作品第 1 页（2500 宽变体），点开预览更快命中。实测 4G 限速（1.6Mbps / 150ms RTT / CPU 4×）桌面首页图片从 ~2.9MB 降到 ~0.31MB，移动 ~0.39MB。
 - **卡片文字层**：顶部是项目名 + 页数/类型（`24 PAGES · EXPLORE` 或「项目资料整理中」），底部是序号 `01` + 类型（`PLATFORM · WEB`）；遮罩为「顶部强渐变 + 底部弱渐变」两层，hover 时整层透明度 .76 → .38；`PENDING` 角标位于项目名块下方 52px。**2026-11-15 调整**：顶部文字块内缩到 `top: 22px / left: 22px`（原来 13 / 15），并且项目名改用站点字体（`font-family: inherit`，Inter / PingFang SC 栈）——项目名里中英文混排（如「抖音AI封面」）此前中文走回退字体、Latin 走 Impact，两种字形混在一起；现在标题与下方页数行同字体（600 字重、`line-height 1.2`）。
 - **Safari / 微信 WebKit 封面重叠修复（2026-11-16）**：WebKit 计算 `.group-projects { width: max-content }` 时**不把「只有 `flex-basis`、没有 `width`」的卡片算进内在宽度**（实测项目容器宽被算成 0/27px），导致首页三组经历按信息块宽度排布、封面互相叠在一起（Chrome 正常）。修法是给 `.stream-project` 补上显式 `width: var(--stream-card-width)`，hover / focus-visible 展开时同步 `width: var(--expanded-card-width, var(--stream-card-width))` 并把 `width` 加进 `.65s cubic-bezier(.66,0,.2,1)` 过渡，这样分组宽度会随展开一起变宽（Safari 与 Chrome 实测几何完全一致）；`.is-returning` 期间 `width` 也要用 `!important` 钉回静止值。iPhone 微信（WKWebView）与 iPhone/桌面 Safari 均按此修复。
 - **hover 展开延迟 150ms（2026-11-16）**：指针停留在卡片上 **150ms** 后才添加 `.stream-project.is-expanded`、开始展开；首页所有 hover 视觉态（展开宽度、压暗其余封面、隐藏左上项目名、封面提亮、阴影）都改为由这个 class 驱动，**快速划过（含横向扫过整排）不会展开、不压暗**。键盘 `:focus-visible` 仍然即时展开；拖拽开始时会清掉展开状态，松手后对指针下的卡片重新计时；离开卡片立即收起（收起不加延迟）。实现集中在 `script.js` 的 `setStreamExpanded / armStreamHover / resetHoverReveal` 与 `styles.css` 的 `.is-expanded` / `.is-hovering` 规则。
@@ -181,8 +182,8 @@
 
 - **原图母版不动**：`assets/works/bytedance/*` 保留原始 3840×2160 PNG（以及 JD/金山历史 4K PNG），任何优化都不覆盖母版。
 - **派生变体**：每页生成 `w960 / w1280 / w1920 / w2560` 四档 WebP（q95，视觉近无损），放在原图同目录；JD/金山页在 `唐尉保作品集2_files/` 下同样生成。
-- **运行时选择**：`pickSlideSource()` 计算「作品框 CSS 宽度 × min(devicePixelRatio, 2)」，选最小够用的变体；超过 2560 才回退原 PNG。1440@1x 约 1280w、1440@2x 约 2560w、1920@2x 或 4K 全屏使用原图。
-- **预加载**：`warmSlideImage()` 按同一规则预加载相邻页并**提前 `decode()`**（保留少量已解码图片的 LRU 缓存），翻页时直接命中、不再临场解码；`showSlide` 预加载**当前页 + 后 2 页 + 前 1 页**（慢网络下滚得比预载快时也能命中）。
+- **运行时选择**：`pickSlideSource()` 计算「作品框 CSS 宽度 × min(devicePixelRatio, 2)」，选最小够用的变体。**超过最大变体时不再直接回退原 PNG**：目标 ≤ 2560×1.3 就用 2560 变体（例如 1440@2x 全屏要 2880，用 2560 上采样 12% 肉眼无感，但省掉数百 KB～数 MB 的 4K 母版）；只有真正超过 3328 的 4K 全屏才用原图。
+- **预加载**：可见页**优先**——`showSlide` 只加载当前页；等当前页 `decode()` 完成（初始进入在 `markArtworkReady`、翻页在动画启动前）再 `warmViewerNeighbors()` 预热**后 2 页 + 前 1 页**，翻页动画的 640ms 就是下一张的前置时间。`warmSlideImage()` 预热后立即 `decode()` 并用 LRU(4) 保住已解码位图，翻页时直接命中；慢网络下先保证「正在看的这张」不和大图预取抢带宽。
 - **全屏/窗口变化**：`refreshArtworkResolution()` 在 resize、进入/退出全屏、图片加载完成后重新选档；尺寸变大升级、变小降级，不重复请求同一 URL。
 - **渐进占位**：首次进入/直接加载时用 320×180 轨道缩略图作为 `.artwork-frame` 背景（`setArtworkPlaceholder`），大图就绪后清除，避免白屏；**翻页过程中不再改占位背景**，避免额外重绘。
 - **占位不能平铺**：占位缩略图必须 `background-size: cover` + `background-repeat: no-repeat` + `background-position: center`；后面的 `.artwork-frame` 简写会把它们重置，需在 CSS 末尾再次声明（并在 JS 内联设置），否则硬刷新时 320×180 缩略图会平铺成“一屏很多图片”。
@@ -261,7 +262,7 @@
 - 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）。
 - 看板令牌不写入仓库，本机保存在 `analytics/local/.data/dashboard-token.txt`（已 gitignore）；本地 `file://` / `localhost` 预览默认不上报，需显式加 `?analytics_endpoint=…`（或 `?analytics_force=1`）才会走线上 collector。
 - `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
-- 看板首屏性能建议（来自 2026-11-16 实测）：桌面首载约 2.9 MB / 图片 2.6 MB，移动 2.1 MB / 图片 1.8 MB，主要来自 6 张 3200×1800 封面；`loading="lazy"` 会提前加载多张。建议后续补 640/960/1280/1920 的封面 `srcset`（AVIF/WebP）并只预加载首张，具体见 `analytics/体验分析报告.md §5 P0-1`。
+- 首屏图片已改为响应式：封面 640/960/1280/1920/2560 WebP `srcset` + 首图 preload，4G 限速下桌面首页图片约 0.31MB（原 ~2.9MB）、LCP ~2.8s（原 ~15.7s）。后续可继续：① 变体改 AVIF（再省 25–35%）；② 预览缩略图转 WebP（当前单项目约 0.12MB）；③ 预览第 1 页 2560 WebP 约 0.27MB，可评估首开先显示 1280 再后台升档；④ 国内访问可把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余大头）。详见 `analytics/体验分析报告.md`。
 - 埋点口径的已知局限（下载点击≠保存成功、DNT 不上报、无跨设备、会话 30 分钟上限、封底页计入总页数等）集中写在 `analytics/体验分析报告.md §7`，对外解释数据时以此为准。
 
 ## 6. 变更记录（主题合并）
@@ -326,6 +327,7 @@
 - 页面链接热区（`links`）盖在作品图上，百分比坐标跟随页面缩放；新窗口打开产品地址，翻页与层切换开始时清空、交接后重建，避免旧页热区在过渡中残留。
 
 - **2026-11-16**：查看器翻页卡顿优化——预加载从「前后各一页」扩到「当前页 + 后 2 页 + 前 1 页」，`warmSlideImage()` 预热后立即 `decode()` 并用 LRU(4) 保住已解码位图，翻页时不再临场解码 2560px WebP（实测 500ms/张网络下连续 6 次翻页 loading 遮罩不再出现）；普通视图下左键点击大图也翻下一页（全屏下右键可翻上一页），点空白/按钮/热区/面板不翻页。
+- **2026-11-16（图片加载优化）**：4G 限速（1.6Mbps / 150ms / CPU 4×）实测首页图片 **2914KB → 311KB**、FCP 2588→1156ms、LCP 15684→2780ms；移动 390@3x 首页图片 386KB、LCP 1716ms。做法：封面 `srcset`（新增 w640，按卡片宽度选档）+ 首图 preload/fetchpriority、首页卡片悬停预取第 1 页、全屏改为 2560 变体不回退 4K PNG（省 ~0.67MB/张）、预览先加载可见页再预热相邻页（打开预览 4315→2362ms，连续翻页 loading 0 次）。
 ### 6.5 复合媒体页基线
 
 - 查看器支持普通图片页与 `type: "composite"` 复合页共存；复合页由 16:9 背景、百分比定位的视频框和 PNG 图层组成，旧图片数据无需迁移。
