@@ -301,6 +301,13 @@ function setCardExpandedCover(card, expanded) {
   const sizes = `${Math.ceil(Math.max(metrics.width, metrics.height * COVER_ASPECT))}px`;
   const cover = metrics.cover;
   const base = coverBase(cover);
+  // While the 16:9 bitmap loads, the card shows its 320px cover thumb as the
+  // background (complete 16:9 composition) and hides the resting portrait crop,
+  // otherwise the portrait crop gets scaled up 2x during the width transition
+  // and looks like an enlarged image that then disappears.
+  if (card.dataset.thumb && !card.style.backgroundImage) {
+    card.style.backgroundImage = `url("${card.dataset.thumb}")`;
+  }
   if (!layer.dataset.wired) {
     layer.dataset.wired = "1";
     layer.addEventListener("load", () => {
@@ -311,10 +318,10 @@ function setCardExpandedCover(card, expanded) {
       }
       // After the fast (w960) bitmap is on screen, upgrade to the sharp 16:9
       // variant for the expanded width. Same crop/composition, no blank frame.
-      if (layer.dataset.sharp !== layer.dataset.cover) {
-        layer.dataset.sharp = layer.dataset.cover;
+      if (layer.dataset.sharp !== layer.dataset.coverSource) {
+        layer.dataset.sharp = layer.dataset.coverSource;
         layer.sizes = layer.dataset.sizes;
-        layer.srcset = coverSrcset(layer.dataset.cover);
+        layer.srcset = coverSrcset(layer.dataset.coverSource);
       }
     });
     layer.addEventListener("error", () => {
@@ -323,8 +330,8 @@ function setCardExpandedCover(card, expanded) {
       }
     });
   }
-  if (layer.dataset.cover !== cover) {
-    layer.dataset.cover = cover;
+  if (layer.dataset.coverSource !== cover) {
+    layer.dataset.coverSource = cover;
     layer.dataset.sizes = sizes;
     layer.dataset.sharp = "";
     layer.removeAttribute("srcset");
@@ -1522,7 +1529,7 @@ function renderTimeline() {
       </header>
       <div class="group-projects" style="--group-width:calc(${experience.projects.map(() => "var(--stream-card-width)").concat(experience.projects.slice(1).map(() => "var(--group-gap)")).join(" + ")})">
         ${experience.projects.map((project, projectIndex) => `
-          <button class="stream-project${project.disabled ? " is-pending" : ""}" type="button" data-home-project="${project.id}" data-home-experience="${experience.id}" aria-label="查看 ${project.name}">
+          <button class="stream-project${project.disabled ? " is-pending" : ""}" type="button" data-home-project="${project.id}" data-home-experience="${experience.id}" data-thumb="${project.slides?.[0] ? slideThumb(project.slides[0]) : project.cover}" aria-label="查看 ${project.name}">
             <img src="${coverBase(project.cover)}.w640.webp" data-cover="${project.cover}" alt="" loading="lazy" decoding="async"${experienceIndex === 0 && projectIndex === 0 ? ' fetchpriority="high"' : ""}>
             <img class="cover-expanded" alt="" aria-hidden="true" decoding="async">
             <span class="stream-project-top"><i>${pad(projectIndex + 1)}</i><em>${project.type}</em></span>
@@ -3454,6 +3461,11 @@ function armStreamHover(card) {
     if (hoveredStreamCard !== card || stream.dragging) return;
     homeEngagement.hovers += 1;
     preloadExpandedCover(card);
+    if (card.dataset.thumb) {
+      const thumb = new Image();
+      thumb.decoding = "async";
+      thumb.src = card.dataset.thumb;
+    }
     setStreamExpanded(card, true);
     // start following the accordion shift only when it really expands
     trackAccordion(card);
@@ -3533,6 +3545,11 @@ elements.timeline.addEventListener("focusin", (event) => {
   // keyboard expansion is pure CSS (:focus-visible); mirror it on the bitmap
   if (card.matches(":focus-visible")) {
     preloadExpandedCover(card);
+    if (card.dataset.thumb) {
+      const thumb = new Image();
+      thumb.decoding = "async";
+      thumb.src = card.dataset.thumb;
+    }
     setCardExpandedCover(card, true);
   }
 });

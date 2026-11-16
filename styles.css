@@ -735,7 +735,12 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
    normal 1s image transition afterwards) */
 .stream-project.is-returning img { transform: none !important; filter: contrast(1.12) brightness(.68) !important; }
 .stream-project.is-returning::after { opacity: .76 !important; }
-.stream-project img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: contrast(1.12) brightness(.68); transform: none; transition: filter .65s; }
+.stream-project img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: contrast(1.12) brightness(.68); transform: none; transition: filter .65s, opacity .16s; }
+/* While expanded, hide the resting portrait crop: the card background (16:9
+   cover thumb) shows the complete composition without any zoom until the
+   sharp 16:9 bitmap fades in. */
+.stream-project.is-expanded img[data-cover], .stream-project:focus-visible img[data-cover] { opacity: 0; transition: opacity 0s; }
+.stream-project.is-expanded, .stream-project:focus-visible { background-size: cover; background-position: center; background-repeat: no-repeat; }
 .stream-project.is-expanded img, .stream-project:focus-visible img { filter: contrast(1.04) brightness(.88); transform: none; }
 /* Full 16:9 cover for the expanded hover state, cross-faded in on top of the
    resting portrait crop so switching sources never blanks the card. */
