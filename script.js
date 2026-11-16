@@ -3296,7 +3296,7 @@ function endStreamDrag(event) {
     // Re-arm the hover accordion only for a real mouse. On touch, arming it
     // after a swipe left a card expanded a moment later even though there is
     // no pointer hovering it, which made the row jump while panning.
-    if (event && event.pointerType === "mouse") {
+    if (event && event.pointerType === "mouse" && hoverCapable()) {
       const under = document.elementFromPoint(event.clientX, event.clientY);
       const card = under instanceof Element ? under.closest(".stream-project") : null;
       if (card) {
@@ -3379,8 +3379,11 @@ function setStreamExpanded(card, expanded) {
   elements.streamShell.classList.toggle("is-hovering", Boolean(anyExpanded));
 }
 
+const hoverCapable = () => window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 function armStreamHover(card) {
   window.clearTimeout(streamHoverTimer);
+  if (!hoverCapable()) return;
   streamHoverTimer = window.setTimeout(() => {
     if (hoveredStreamCard !== card || stream.dragging) return;
     homeEngagement.hovers += 1;
@@ -3410,7 +3413,7 @@ function resetAccordionShift() {
 }
 
 elements.streamShell.addEventListener("pointerover", (event) => {
-  if (event.pointerType !== "mouse" || stream.dragging) return;
+  if (event.pointerType !== "mouse" || stream.dragging || !hoverCapable()) return;
   const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
   if (!card || card === hoveredStreamCard) return;
   const previous = hoveredStreamCard;
