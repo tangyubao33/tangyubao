@@ -1,0 +1,25 @@
+# Cloudflare Worker + D1 for the portfolio analytics collector.
+# Deploy: see ../../README.md. `database_id` comes from:
+#   npx wrangler d1 create tangyubao-analytics
+
+name = "tangyubao-analytics"
+main = "src/index.js"
+compatibility_date = "2026-11-16"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tangyubao-analytics"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+SITE_ID = "tangyubao-portfolio"
+# Optional: extra accepted site ids, comma separated.
+ALLOWED_SITES = ""
+
+[triggers]
+# Daily retention cleanup (180 days); the handler is in src/index.js.
+crons = ["17 3 * * *"]

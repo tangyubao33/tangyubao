@@ -2,6 +2,43 @@ const assetRoot = "唐尉保作品集2_files";
 
 const pad = (value) => String(value).padStart(2, "0");
 
+/* ---------------------------------------------------------------------------
+   Analytics hooks (analytics.js). Every call is guarded: a blocked or broken
+   collector must never affect the portfolio itself. `pageView()` fires here so
+   the entry page view is the first event of the session, even on a deep link.
+--------------------------------------------------------------------------- */
+const analytics = window.PortfolioAnalytics || null;
+const track = (name, props) => {
+  try {
+    analytics?.track?.(name, props);
+  } catch (error) {
+    /* analytics must never break the page */
+  }
+};
+const analyticsActiveMs = () => {
+  try {
+    return analytics?.activeMs?.() || 0;
+  } catch (error) {
+    return 0;
+  }
+};
+const makeTrackId = (prefix) => {
+  try {
+    return analytics?.id?.(prefix) || `${prefix}_${Date.now().toString(36)}`;
+  } catch (error) {
+    return `${prefix}_${Date.now().toString(36)}`;
+  }
+};
+const currentViewportMode = () => {
+  const width = window.innerWidth || 0;
+  const height = window.innerHeight || 0;
+  if (height <= 520 && width > 760) return "short-landscape";
+  if (width <= 760) return "mobile";
+  if (width <= 1100) return "tablet";
+  return "desktop";
+};
+analytics?.pageView?.();
+
 const jdSlides = Array.from({ length: 37 }, (_, index) => {
   const number = index + 1;
   const extension = [22, 33].includes(number) ? "jpg" : "png";
@@ -623,6 +660,13 @@ function exitPseudoFullscreen() {
 
 function toggleViewerFullscreen() {
   if (state.screen !== "viewer") return;
+  const entering = !isViewerFullscreen();
+  if (entering && viewerSession) viewerSession.fullscreen = true;
+  track("fullscreen_toggle", {
+    entering: entering,
+    project: state.projectId,
+    page: state.slideIndex + 1
+  });
   beginFullscreenMorph();
   if (isViewerFullscreen()) {
     if (document.fullscreenElement) {
@@ -667,13 +711,13 @@ function fullscreenPageTarget(event) {
 }
 
 elements.viewerScreen.addEventListener("click", (event) => {
-  if (fullscreenPageTarget(event)) navigateViewer(1);
+  if (fullscreenPageTarget(event)) navigateViewer(1, "click");
 });
 
 elements.viewerScreen.addEventListener("contextmenu", (event) => {
   if (!isViewerFullscreen() || state.screen !== "viewer") return;
   event.preventDefault();
-  if (fullscreenPageTarget(event)) navigateViewer(-1);
+  if (fullscreenPageTarget(event)) navigateViewer(-1, "click");
 });
 
 document.addEventListener("pointermove", wakeFullscreenUI, { passive: true });
@@ -816,10 +860,38 @@ aboutCols.forEach((col) => {
   col.querySelector(".about-side, .about-main")?.addEventListener("scroll", () => updateAboutScrollbar(col), { passive: true });
 });
 
-function setContactCard(open, restoreFocus = false) {
+function setContactCard(open, restoreFocus = false, reason = "toggle") {
   if (!contactToggles.length || !contactCard) return;
   const isOpen = contactCard.classList.contains("is-open");
   if (open === isOpen) return;
+  if (open) {
+    const source = contactTrigger?.classList.contains("profile-top") ? "profile" : "header";
+    aboutSession = {
+      id: makeTrackId("ab"),
+      source: source,
+      screen: state.screen,
+      startedAt: analyticsActiveMs(),
+      project: state.projectId || null
+    };
+    track("about_open", {
+      about_id: aboutSession.id,
+      source: source,
+      screen: state.screen,
+      project: state.projectId || null,
+      page: state.screen === "viewer" ? state.slideIndex + 1 : null
+    });
+  } else if (aboutSession) {
+    track("about_close", {
+      about_id: aboutSession.id,
+      source: aboutSession.source,
+      screen: aboutSession.screen,
+      duration_ms: Math.max(0, analyticsActiveMs() - aboutSession.startedAt),
+      reason: reason,
+      side_scroll: aboutScrollPct("side"),
+      main_scroll: aboutScrollPct("main")
+    });
+    aboutSession = null;
+  }
   contactCard.classList.toggle("is-open", open);
   contactBackdrop?.classList.toggle("is-open", open);
   document.body.classList.toggle("is-about-open", open);
@@ -855,6 +927,11 @@ contactCard.addEventListener("click", (event) => {
   const open = !wrap.classList.contains("is-open");
   wrap.classList.toggle("is-open", open);
   toggle.setAttribute("aria-expanded", String(open));
+  track("about_fold", {
+    about_id: aboutSession?.id || null,
+    fold: toggle.getAttribute("aria-controls") || "unknown",
+    open: open
+  });
   const panel = wrap.querySelector(".about-fold-panel");
   if (panel) {
     panel.toggleAttribute("inert", !open);
@@ -886,11 +963,287 @@ document.addEventListener("click", (event) => {
   setContactCard(false);
 });
 
+/* Contact / resume / outbound-link intents. These are captured on document
+   because the links live in several places (header, about dialog, THANK page,
+   artwork hotspots) and are re-rendered per slide. */
+document.addEventListener("click", (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) return;
+  const contact = target.closest('a[href^="tel:"], a[href^="mailto:"]');
+  if (contact) {
+    const href = contact.getAttribute("href") || "";
+    const scope = contact.closest("[data-contact-card]")
+      ? "about"
+      : contact.closest("[data-thank-slide]")
+        ? "thank"
+        : contact.closest(".site-header")
+          ? "header"
+          : "viewer";
+    track("contact_click", {
+      channel: href.indexOf("tel:") === 0 ? "tel" : "email",
+      source: scope,
+      screen: state.screen,
+      project: state.projectId || null,
+      page: state.screen === "viewer" ? state.slideIndex + 1 : null
+    });
+  }
+  const download = target.closest(".about-download");
+  if (download) {
+    track("resume_download", {
+      file: "tangyubao-resume-2026.pdf",
+      source: "about",
+      about_id: aboutSession?.id || null,
+      screen: state.screen,
+      since_about_open_ms: aboutSession ? analyticsActiveMs() - aboutSession.startedAt : null
+    });
+  }
+  const outbound = target.closest(".artwork-links a, .artwork-link");
+  if (outbound) {
+    let host = "";
+    try {
+      host = new URL(outbound.href).hostname;
+    } catch (error) {
+      host = "";
+    }
+    track("link_click", {
+      project: state.projectId,
+      page: state.slideIndex + 1,
+      label: outbound.getAttribute("aria-label") || outbound.getAttribute("title") || "",
+      host: host
+    });
+  }
+});
+
 window.addEventListener("resize", () => {
   if (contactCard.classList.contains("is-open")) updateAboutScrollbars();
 });
 
 const currentProject = () => currentExperience()?.projects.find((project) => project.id === state.projectId);
+
+/* ---- analytics session state --------------------------------------------
+   A viewer "session" starts when a project is opened and ends when it is left,
+   so page-depth, dwell and drop-off can be paired per open instead of being
+   inferred from loose events. `homeEngagement` keeps the per-home-visit state
+   used by the exposure and scroll-depth events. */
+let viewerSession = null;
+let viewerExitReason = "";
+let aboutSession = null;
+let playedMedia = new Set();
+const homeEngagement = { enteredAt: 0, exposures: new Set(), drags: 0, hovers: 0, maxProgress: 0, buckets: new Set() };
+const cardImpressions = new Set();
+const impressionTimers = new Map();
+let impressionCheckTimer = 0;
+
+const slideTypeOf = (slide) => (isThank(slide) ? "thank" : isComposite(slide) ? "composite" : isStack(slide) ? "stack" : "image");
+
+function startViewerSession(project, experience, source) {
+  endViewerSession("restart");
+  if (!project || !experience || !project.slides?.length) return;
+  playedMedia = new Set();
+  viewerSession = {
+    id: makeTrackId("vr"),
+    projectId: project.id,
+    projectName: project.name,
+    experienceId: experience.id,
+    total: project.slides.length,
+    contentPages: contentPageCount(project),
+    source: source || "direct",
+    startedAt: analyticsActiveMs(),
+    slideAt: analyticsActiveMs(),
+    maxIndex: 0,
+    exitIndex: 0,
+    lastPage: -1,
+    viewed: new Set(),
+    slides: 0,
+    fullscreen: false,
+    ended: false
+  };
+  const visitor = analytics?.visitor?.() || {};
+  track("viewer_open", {
+    viewer_id: viewerSession.id,
+    project: project.id,
+    project_key: `${experience.id}/${project.id}`,
+    name: project.name,
+    experience: experience.id,
+    company: experience.company,
+    pages: viewerSession.total,
+    content_pages: viewerSession.contentPages,
+    origin: viewerSession.source,
+    visitor_new: visitor.new,
+    mode: currentViewportMode()
+  });
+  analytics?.setContext?.({ viewer_project: project.id, viewer_page: 1, viewer_id: viewerSession.id });
+}
+
+function endViewerSession(reason = "navigate") {
+  if (!viewerSession || viewerSession.ended) return;
+  const session = viewerSession;
+  session.ended = true;
+  viewerSession = null;
+  const duration = Math.max(0, analyticsActiveMs() - session.startedAt);
+  const maxPercent = session.total > 1 ? Math.round(((session.maxIndex + 1) / session.total) * 100) : 100;
+  track("viewer_exit", {
+    viewer_id: session.id,
+    project: session.projectId,
+    project_key: `${session.experienceId}/${session.projectId}`,
+    experience: session.experienceId,
+    total: session.total,
+    content_pages: session.contentPages,
+    max_index: session.maxIndex + 1,
+    exit_index: state.slideIndex + 1,
+    slides_viewed: session.viewed.size,
+    duration_ms: duration,
+    bounce: session.viewed.size <= 1,
+    quick_exit: duration < 5000,
+    reached_last_content: session.maxIndex >= session.contentPages - 1,
+    reached_thank: session.maxIndex >= session.total - 1,
+    max_percent: Math.max(0, Math.min(100, maxPercent)),
+    fullscreen: session.fullscreen,
+    last_dwell_ms: Math.max(0, analyticsActiveMs() - session.slideAt),
+    exit_reason: reason
+  });
+  analytics?.setContext?.({ viewer_project: null, viewer_page: null, viewer_id: null });
+}
+
+function trackViewerSlide(slide, via) {
+  const session = viewerSession;
+  if (!session) return;
+  const now = analyticsActiveMs();
+  const dwell = Math.max(0, now - session.slideAt);
+  const previousPage = session.lastPage >= 0 ? session.lastPage + 1 : 0;
+  session.slideAt = now;
+  session.maxIndex = Math.max(session.maxIndex, state.slideIndex);
+  session.exitIndex = state.slideIndex;
+  session.lastPage = state.slideIndex;
+  const firstView = !session.viewed.has(state.slideIndex);
+  if (firstView) session.viewed.add(state.slideIndex);
+  session.slides += 1;
+  track("viewer_slide", {
+    viewer_id: session.id,
+    project: session.projectId,
+    project_key: `${session.experienceId}/${session.projectId}`,
+    page: state.slideIndex + 1,
+    total: session.total,
+    content_pages: session.contentPages,
+    type: slideTypeOf(slide),
+    source: via,
+    first_view: firstView,
+    prev_page: previousPage,
+    prev_dwell_ms: dwell
+  });
+  analytics?.setContext?.({ viewer_project: session.projectId, viewer_page: state.slideIndex + 1, viewer_id: session.id });
+}
+
+function trackCardClick(experience, project, mode) {
+  if (!experience || !project) return;
+  const key = `${experience.id}/${project.id}`;
+  track("card_click", {
+    project: project.id,
+    project_key: key,
+    name: project.name,
+    experience: experience.id,
+    company: experience.company,
+    mode: mode,
+    position: experience.projects.findIndex((item) => item.id === project.id) + 1,
+    exposed: cardImpressions.has(key),
+    time_on_home_ms: mode === "home" && homeEngagement.enteredAt ? analyticsActiveMs() - homeEngagement.enteredAt : null
+  });
+}
+
+function startHomeEngagement() {
+  homeEngagement.enteredAt = analyticsActiveMs();
+  homeEngagement.exposures = new Set();
+  homeEngagement.drags = 0;
+  homeEngagement.hovers = 0;
+  homeEngagement.maxProgress = 0;
+  homeEngagement.buckets = new Set();
+  const visitor = analytics?.visitor?.() || {};
+  const session = analytics?.session?.() || {};
+  track("home_view", {
+    cards: elements.timeline.querySelectorAll(".stream-project").length,
+    experiences: Object.keys(experiences).length,
+    visitor_new: visitor.new,
+    session_new: session.new,
+    returning: visitor.new === false,
+    mode: currentViewportMode(),
+    vw: window.innerWidth,
+    vh: window.innerHeight
+  });
+  scheduleImpressionCheck(700);
+}
+
+function endHomeEngagement() {
+  if (!homeEngagement.enteredAt) return;
+  const duration = Math.max(0, analyticsActiveMs() - homeEngagement.enteredAt);
+  track("home_exit", {
+    duration_ms: duration,
+    impressions: homeEngagement.exposures.size,
+    drags: homeEngagement.drags,
+    hovers: homeEngagement.hovers,
+    max_progress: Math.round(homeEngagement.maxProgress * 100),
+    scroll_buckets: [...homeEngagement.buckets].sort((a, b) => a - b).map((bucket) => Math.round(bucket * 100)).join(","),
+    mode: currentViewportMode()
+  });
+  homeEngagement.enteredAt = 0;
+}
+
+function aboutScrollPct(which) {
+  const view = contactCard?.querySelector(which === "side" ? ".about-side" : ".about-main");
+  if (!view) return 0;
+  const max = view.scrollHeight - view.clientHeight;
+  return max > 0 ? Math.round((view.scrollTop / max) * 100) : 100;
+}
+
+/* Exposure = at least half of the card's area inside the stream viewport for
+   500ms. The stream moves by transform (not native scroll), so Intersection-
+   Observer would miss drags; the checks are driven by the damped stream frame
+   settling instead. */
+function scheduleImpressionCheck(delay = 120) {
+  window.clearTimeout(impressionCheckTimer);
+  impressionCheckTimer = window.setTimeout(checkCardImpressions, delay);
+}
+
+function checkCardImpressions() {
+  if (state.screen !== "home" || document.visibilityState !== "visible") return;
+  const shell = elements.streamShell;
+  if (!shell) return;
+  const shellRect = shell.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const cards = [...elements.timeline.querySelectorAll(".stream-project")];
+  cards.forEach((card, index) => {
+    const key = card.dataset.homeExperience ? `${card.dataset.homeExperience}/${card.dataset.homeProject}` : "";
+    if (!key || cardImpressions.has(key)) return;
+    const rect = card.getBoundingClientRect();
+    const left = Math.max(rect.left, shellRect.left);
+    const right = Math.min(rect.right, shellRect.right);
+    const top = Math.max(rect.top, 0);
+    const bottom = Math.min(rect.bottom, viewportHeight);
+    const area = Math.max(0, right - left) * Math.max(0, bottom - top);
+    const ratio = rect.width && rect.height ? area / (rect.width * rect.height) : 0;
+    if (ratio >= 0.5) {
+      if (impressionTimers.has(key)) return;
+      impressionTimers.set(key, window.setTimeout(() => {
+        impressionTimers.delete(key);
+        if (cardImpressions.has(key) || state.screen !== "home") return;
+        cardImpressions.add(key);
+        homeEngagement.exposures.add(key);
+        const nameNode = card.querySelector(".stream-project-info b");
+        track("card_impression", {
+          project: card.dataset.homeProject,
+          project_key: key,
+          experience: card.dataset.homeExperience,
+          name: nameNode?.textContent || "",
+          position: index + 1,
+          ratio: Math.round(ratio * 100) / 100,
+          time_on_home_ms: homeEngagement.enteredAt ? analyticsActiveMs() - homeEngagement.enteredAt : null
+        });
+      }, 500));
+    } else if (impressionTimers.has(key)) {
+      window.clearTimeout(impressionTimers.get(key));
+      impressionTimers.delete(key);
+    }
+  });
+}
 
 function renderTimeline() {
   elements.timeline.innerHTML = Object.values(experiences).map((experience) => `
@@ -982,11 +1335,20 @@ function openOtherProject(experienceId, projectId, card) {
   const experience = experiences[experienceId];
   const project = experience?.projects.find((item) => item.id === projectId);
   if (!experience || !project || project.disabled) return;
+  track("other_project_click", {
+    from_project: state.projectId,
+    from_experience: state.experienceId,
+    from_page: state.slideIndex + 1,
+    to_project: projectId,
+    to_experience: experienceId
+  });
+  if (state.screen === "viewer") endViewerSession("other_project");
   const commit = () => {
     state.experienceId = experienceId;
     state.projectId = projectId;
     state.slideIndex = 0;
     state.viewerOrigin = "home";
+    startViewerSession(project, experience, "other_project");
     renderViewer();
     updateViewerBackLabel();
     setActiveScreen("viewer");
@@ -1035,7 +1397,7 @@ function renderViewer() {
       <b>${pad(index + 1)}</b>
     </button>`;
   }).join("");
-  showSlide(state.slideIndex, false);
+  showSlide(state.slideIndex, false, "initial");
   window.requestAnimationFrame(() => {
     updateRailMask();
     revealCurrentThumbnail("auto");
@@ -1461,6 +1823,17 @@ function setBoxLoading(box, on) {
 
 function bindMediaVideo(box, overlay, video) {
   video.addEventListener("playing", () => {
+    const mediaKey = `${state.projectId || "none"}:${state.slideIndex}:${box.dataset.mediaId || "video"}`;
+    if (!playedMedia.has(mediaKey)) {
+      playedMedia.add(mediaKey);
+      track("video_play", {
+        project: state.projectId,
+        page: state.slideIndex + 1,
+        video_id: box.dataset.mediaId || "",
+        label: overlay?.label || "",
+        muted: Boolean(video.muted)
+      });
+    }
     setBoxLoading(box, false);
     box.dataset.playing = "true";
     box.classList.add("is-playing");
@@ -1704,26 +2077,63 @@ function moveArtwork(slide, direction) {
     placeArtwork(slide);
     return;
   }
-  // Leaving the closing THANK page: there is no bitmap to slide out, so the
-  // closing page dissolves over the incoming page instead of sliding.
+  // Leaving the closing THANK page: same 640ms slide as every other page turn,
+  // with the incoming bitmap sliding in below it (there is no bitmap to put on
+  // the ghost layer, so the closing page itself is the outgoing layer).
   const thank = elements.thankSlide;
   if (thank && !thank.hidden && !isThank(slide)) {
     window.clearTimeout(slideAnimTimer);
-    slideAnimToken += 1;
+    const token = ++slideAnimToken;
     clearArtworkLoading();
     resetMediaBoxes();
+    if (slideMotionQuery.matches) {
+      hideThankSlide();
+      placeArtwork(slide);
+      return;
+    }
     thank.style.zIndex = "3";
-    thank.style.transition = "opacity .3s ease";
-    thank.style.opacity = "0";
-    window.clearTimeout(thankHideTimer);
-    thankHideTimer = window.setTimeout(hideThankSlide, 320);
     placeArtwork(slide, { keepThank: true });
+    sizeArtworkFrame();
+    const startSlide = () => {
+      if (token !== slideAnimToken) return;
+      const artwork = elements.artwork;
+      artwork.style.transition = "none";
+      artwork.style.transform = `translateY(${direction > 0 ? 100 : -100}%) scale(1.02)`;
+      thank.style.transition = "none";
+      thank.style.transform = "translateY(0) scale(1)";
+      void artwork.offsetWidth;
+      const easing = "cubic-bezier(.76, 0, .24, 1)";
+      const duration = 640;
+      artwork.style.transition = `transform ${duration}ms ${easing}`;
+      thank.style.transition = `transform ${duration}ms ${easing}`;
+      window.requestAnimationFrame(() => {
+        if (token !== slideAnimToken) return;
+        artwork.style.transform = "translateY(0) scale(1)";
+        thank.style.transform = `translateY(${direction > 0 ? -100 : 100}%) scale(1)`;
+      });
+      clearArtworkLoading();
+      elements.artwork.classList.remove("is-loading");
+      window.clearTimeout(thankHideTimer);
+      slideAnimTimer = window.setTimeout(() => {
+        if (token !== slideAnimToken) return;
+        hideThankSlide();
+        artwork.style.transition = "";
+        artwork.style.transform = "";
+        renderSlideLinks(slide);
+        if (isComposite(slide)) {
+          renderOverlays(slide);
+          startSlideMedia(slide);
+        }
+        markArtworkReady();
+      }, duration + 40);
+    };
+    whenImageDecoded(elements.artwork, startSlide);
     return;
   }
-  // Turning into the closing THANK page: cross-fade instead of a slide. The
-  // outgoing bitmap keeps its size (the frame does not resize on this turn)
-  // and dissolves out over the dark closing page, so no white page edge slides
-  // across and nothing jitters.
+  // Turning into the closing THANK page: identical 640ms slide to every other
+  // page turn. The bottom panel only opens on this page, so the frame resize is
+  // deferred until the slide has finished (see scheduleLastSlide) - the slide
+  // itself runs at a stable frame size, which is what used to jitter.
   if (isThank(slide)) {
     const previousSrc = elements.artwork.currentSrc || elements.artwork.src || "";
     resetArtworkLayers();
@@ -1731,24 +2141,32 @@ function moveArtwork(slide, direction) {
     showThankSlide();
     if (!previousSrc) return;
     const token = slideAnimToken;
+    const layer = elements.thankSlide;
     ghost.src = previousSrc;
     ghost.alt = "";
     ghost.style.visibility = "visible";
-    ghost.style.transform = "";
-    ghost.style.opacity = "1";
+    ghost.style.opacity = "";
+    ghost.style.transform = "translateY(0)";
     ghost.style.transition = "none";
+    layer.style.transition = "none";
+    layer.style.transform = `translateY(${direction > 0 ? 100 : -100}%) scale(1.02)`;
     void ghost.offsetWidth;
-    const duration = 340;
-    ghost.style.transition = `opacity ${duration}ms ease`;
+    const easing = "cubic-bezier(.76, 0, .24, 1)";
+    const duration = 640;
+    ghost.style.transition = `transform ${duration}ms ${easing}`;
+    layer.style.transition = `transform ${duration}ms ${easing}`;
     window.requestAnimationFrame(() => {
       if (token !== slideAnimToken) return;
-      ghost.style.opacity = "0";
+      ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%)`;
+      layer.style.transform = "translateY(0) scale(1)";
     });
     slideAnimTimer = window.setTimeout(() => {
       if (token !== slideAnimToken) return;
       ghost.style.visibility = "hidden";
       ghost.style.transition = "none";
-      ghost.style.opacity = "";
+      ghost.style.transform = "";
+      layer.style.transition = "";
+      layer.style.transform = "";
       markArtworkReady();
     }, duration + 40);
     return;
@@ -1788,7 +2206,7 @@ function moveArtwork(slide, direction) {
       ghost.style.transition = `transform ${duration}ms ${easing}`;
       elements.artwork.style.transition = `transform ${duration}ms ${easing}`;
       window.requestAnimationFrame(() => {
-        ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%) scale(.98)`;
+        ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%)`;
         elements.artwork.style.transform = "translateY(0) scale(1)";
       });
       clearArtworkLoading();
@@ -1894,7 +2312,7 @@ function animateStackStep(slide, nextIndex, direction) {
   });
 }
 
-function stepStack(direction) {
+function stepStack(direction, via = "wheel") {
   const project = currentProject();
   const slide = project?.slides?.[state.slideIndex];
   if (!isStack(slide)) return false;
@@ -1907,13 +2325,22 @@ function stepStack(direction) {
   if (now < stackStepLock) return true;
   stackStepLock = now + 620;
   stackProgress.set(slide, next);
+  track("stack_step", {
+    project: state.projectId,
+    page: state.slideIndex + 1,
+    from_layer: current + 1,
+    to_layer: next + 1,
+    total_layers: layers.length,
+    direction: direction,
+    source: via
+  });
   animateStackStep(slide, next, direction);
   return true;
 }
 
-function navigateViewer(direction) {
-  if (stepStack(direction)) return;
-  showSlide(state.slideIndex + direction);
+function navigateViewer(direction, via = "wheel") {
+  if (stepStack(direction, via)) return;
+  showSlide(state.slideIndex + direction, true, via);
 }
 
 let lastSlideTimer = 0;
@@ -1925,7 +2352,7 @@ let lastSlideTimer = 0;
 function scheduleLastSlide(wantsLast, direction) {
   window.clearTimeout(lastSlideTimer);
   const current = elements.viewerScreen.classList.contains("is-last-slide");
-  if (direction === 0 || current === wantsLast) {
+  if (direction === 0 || current === wantsLast || slideMotionQuery.matches) {
     setLastSlide(wantsLast);
     return;
   }
@@ -1933,19 +2360,19 @@ function scheduleLastSlide(wantsLast, direction) {
   lastSlideTimer = window.setTimeout(() => {
     const projectNow = currentProject();
     if (!projectNow || state.screen !== "viewer" || state.slideIndex !== targetIndex) return;
-    const lastIdx = projectNow.slides.length - 1;
-    const fromIdx = isThank(projectNow.slides[lastIdx]) ? lastIdx - 1 : lastIdx;
-    setLastSlide(state.slideIndex >= fromIdx);
+    setLastSlide(state.slideIndex === projectNow.slides.length - 1);
   }, 700);
 }
 
-function showSlide(index, scrollThumbnail = true) {
+function showSlide(index, scrollThumbnail = true, via = "programmatic") {
   const project = currentProject();
   if (!project?.slides?.length) return;
 
+  const previousIndex = state.slideIndex;
   const direction = index === state.slideIndex ? 0 : (index > state.slideIndex ? 1 : -1);
   state.slideIndex = (index + project.slides.length) % project.slides.length;
   const slide = project.slides[state.slideIndex];
+  if (previousIndex !== state.slideIndex || via === "initial") trackViewerSlide(slide, via);
   if (isStack(slide)) {
     // Every entry into a merged page starts from its initial (base) layer,
     // whether the visitor arrived by scrolling down or up.
@@ -1954,13 +2381,7 @@ function showSlide(index, scrollThumbnail = true) {
   }
   elements.currentCount.textContent = pad(state.slideIndex + 1);
   elements.fullscreenCurrent.textContent = pad(state.slideIndex + 1);
-  // The final THANK page is not a bitmap, so the "other projects" panel opens
-  // one page earlier and stays open across the last content page -> THANK turn.
-  // That keeps the artwork frame at one size during the cross-fade, otherwise
-  // the frame resize and the page transition fight each other (white slivers +
-  // jitter while the outgoing page shrinks).
-  const lastIndex = project.slides.length - 1;
-  const panelFromIndex = isThank(project.slides[lastIndex]) ? lastIndex - 1 : lastIndex;
+  const panelFromIndex = project.slides.length - 1;
   scheduleLastSlide(state.slideIndex >= panelFromIndex, direction);
 
   if (direction === 0) {
@@ -2003,7 +2424,13 @@ function focusScreenHeading(screenName) {
 
 function setActiveScreen(screenName) {
   const changed = state.screen !== screenName;
-  if (changed) setContactCard(false);
+  const previousScreen = state.screen;
+  if (changed) {
+    if (previousScreen === "viewer") endViewerSession(viewerExitReason || "navigate");
+    if (previousScreen === "home") endHomeEngagement();
+    viewerExitReason = "";
+    setContactCard(false, false, "screen_change");
+  }
   if (screenName !== "viewer") {
     clearViewerEntry();
     clearFullscreenMorph();
@@ -2023,6 +2450,14 @@ function setActiveScreen(screenName) {
   }
   state.screen = screenName;
   document.body.dataset.screen = screenName;
+  if (changed) {
+    analytics?.setScreen?.(screenName, {
+      from: previousScreen,
+      project: state.projectId || null,
+      experience: state.experienceId || null
+    });
+    if (screenName === "home") startHomeEngagement();
+  }
   if (changed && routeHydrated) window.requestAnimationFrame(() => focusScreenHeading(screenName));
   elements.screens.forEach((screen) => {
     const active = screen.dataset.screen === screenName;
@@ -2185,7 +2620,8 @@ function startViewerExit() {
   return true;
 }
 
-function leaveViewer() {
+function leaveViewer(reason = "back") {
+  viewerExitReason = reason;
   if (startViewerExit()) return;
   if (state.viewerOrigin === "projects" && state.experienceId && state.screen === "viewer") {
     elements.viewerScreen.classList.add("is-dock-hidden");
@@ -2198,6 +2634,12 @@ function leaveViewer() {
 
 function openExperience(experienceId, updateHash = true) {
   if (!experiences[experienceId]) return;
+  track("experience_open", {
+    experience: experienceId,
+    company: experiences[experienceId].company,
+    from: state.screen,
+    mode: currentViewportMode()
+  });
   state.experienceId = experienceId;
   state.projectId = null;
   state.slideIndex = 0;
@@ -2206,13 +2648,15 @@ function openExperience(experienceId, updateHash = true) {
   if (updateHash) pushRoute(`#experience/${experienceId}`);
 }
 
-function openProject(projectId, updateHash = true) {
+function openProject(projectId, updateHash = true, source = "direct") {
   const project = currentExperience()?.projects.find((item) => item.id === projectId);
   if (!project || project.disabled) return;
+  if (state.screen === "viewer") endViewerSession("switch_project");
   clearViewerExit();
   state.viewerOrigin = state.screen === "projects" ? "projects" : "home";
   state.projectId = projectId;
   state.slideIndex = 0;
+  startViewerSession(project, currentExperience(), source);
   renderViewer();
   updateViewerBackLabel();
   setActiveScreen("viewer");
@@ -2345,17 +2789,19 @@ function openHomeProject(experienceId, projectId, card) {
   const experience = experiences[experienceId];
   const project = experience?.projects.find((item) => item.id === projectId);
   if (!experience || !project) return;
+  trackCardClick(experience, project, "home");
   if (project.disabled) {
     openExperience(experienceId);
     return;
   }
   state.experienceId = experienceId;
   startViewerEntry(card, project);
-  openProject(projectId);
+  openProject(projectId, true, "home");
   runViewerEntry();
 }
 
 function handleRoute() {
+  if (state.screen === "viewer") viewerExitReason = "route";
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   if (parts[0] === "project" && parts[1] && parts[2]) {
     const experience = experiences[parts[1]];
@@ -2389,13 +2835,20 @@ document.addEventListener("click", (event) => {
   const fullscreenTrigger = event.target.closest("[data-fullscreen-toggle]");
   const otherProjectTrigger = event.target.closest("[data-other-project]");
 
-  if (homeTrigger) goHome();
-  else if (homeProjectTrigger) openHomeProject(homeProjectTrigger.dataset.homeExperience, homeProjectTrigger.dataset.homeProject, homeProjectTrigger);
-  else if (projectTrigger) openProject(projectTrigger.dataset.project);
-  else if (thumbnailTrigger) showSlide(Number(thumbnailTrigger.dataset.slideIndex));
+  if (homeTrigger) {
+    if (state.screen === "viewer") viewerExitReason = "brand_home";
+    goHome();
+  } else if (homeProjectTrigger) openHomeProject(homeProjectTrigger.dataset.homeExperience, homeProjectTrigger.dataset.homeProject, homeProjectTrigger);
+  else if (projectTrigger) {
+    const experience = currentExperience();
+    const project = experience?.projects.find((item) => item.id === projectTrigger.dataset.project);
+    trackCardClick(experience, project, "projects");
+    openProject(projectTrigger.dataset.project, true, "projects");
+  }
+  else if (thumbnailTrigger) showSlide(Number(thumbnailTrigger.dataset.slideIndex), true, "thumbnail");
   else if (otherProjectTrigger) openOtherProject(otherProjectTrigger.dataset.otherExperience, otherProjectTrigger.dataset.otherProject, otherProjectTrigger);
   else if (fullscreenTrigger) toggleViewerFullscreen();
-  else if (viewerBack) leaveViewer();
+  else if (viewerBack) leaveViewer("back");
 });
 
 document.addEventListener("keydown", (event) => {
@@ -2411,8 +2864,8 @@ document.addEventListener("keydown", (event) => {
     if (event.key === "End") jumpStream(1);
   }
   if (state.screen === "viewer") {
-    if (event.key === "ArrowDown" || event.key === "PageDown") navigateViewer(1);
-    if (event.key === "ArrowUp" || event.key === "PageUp") navigateViewer(-1);
+    if (event.key === "ArrowDown" || event.key === "PageDown") navigateViewer(1, "keyboard");
+    if (event.key === "ArrowUp" || event.key === "PageUp") navigateViewer(-1, "keyboard");
     if (event.key === "Escape") {
       if (isViewerFullscreen()) {
         beginFullscreenMorph();
@@ -2421,7 +2874,7 @@ document.addEventListener("keydown", (event) => {
         return;
       }
       if (performance.now() - fullscreenExitAt < 400) return;
-      leaveViewer();
+      leaveViewer("esc");
     }
   }
 });
@@ -2437,7 +2890,7 @@ elements.artworkFrame.addEventListener("pointerup", (event) => {
   if (swipeStartY == null) return;
   const distance = swipeStartY - event.clientY;
   swipeStartY = null;
-  if (Math.abs(distance) > 60) navigateViewer(distance > 0 ? 1 : -1);
+  if (Math.abs(distance) > 60) navigateViewer(distance > 0 ? 1 : -1, "swipe");
 });
 elements.artworkFrame.addEventListener("pointercancel", () => { swipeStartY = null; });
 
@@ -2459,11 +2912,19 @@ viewerElement.addEventListener("wheel", (event) => {
   const direction = Math.sign(viewerWheelDelta);
   viewerWheelDelta = 0;
   viewerWheelLock = now + 230;
-  navigateViewer(direction);
+  navigateViewer(direction, "wheel");
 }, { passive: false });
 
 window.addEventListener("popstate", handleRoute);
 window.addEventListener("hashchange", handleRoute);
+
+// Capture phase: analytics.js also listens for pagehide (bubble) to flush its
+// beacon, so the closing viewer/home events have to be queued before that.
+window.addEventListener("pagehide", () => {
+  endViewerSession("page_hide");
+  endHomeEngagement();
+  analytics?.flush?.("pagehide");
+}, true);
 
 if (window.matchMedia("(pointer: fine)").matches) {
   window.addEventListener("pointermove", (event) => {
@@ -2613,9 +3074,19 @@ function streamFrame(time) {
   if (Math.abs(stream.target - stream.current) < 0.1) stream.current = stream.target;
   if (stream.accordion) updateAccordionShift();
   applyStream();
+  if (state.screen === "home" && stream.max > 0) {
+    const progress = stream.current / stream.max;
+    if (progress > homeEngagement.maxProgress) homeEngagement.maxProgress = progress;
+    [0.25, 0.5, 0.75, 1].forEach((bucket) => {
+      if (progress < bucket || homeEngagement.buckets.has(bucket)) return;
+      homeEngagement.buckets.add(bucket);
+      track("stream_scroll", { bucket: Math.round(bucket * 100), progress: Math.round(progress * 100) });
+    });
+  }
   if (stream.current === stream.target && !stream.dragging && !stream.accordion) {
     stream.raf = 0;
     stream.lastFrame = 0;
+    scheduleImpressionCheck(160);
     return;
   }
   stream.raf = requestAnimationFrame(streamFrame);
@@ -2670,6 +3141,7 @@ function endStreamDrag(event) {
   if (!streamDrag || (event && event.pointerId !== streamDrag.id)) return;
   const dragged = streamDrag.moved;
   if (dragged) {
+    homeEngagement.drags += 1;
     suppressStreamClick = true;
     window.setTimeout(() => { suppressStreamClick = false; }, 400);
   }
@@ -2703,6 +3175,11 @@ elements.streamShell.addEventListener("click", (event) => {
 }, true);
 
 elements.streamShell.addEventListener("dragstart", (event) => event.preventDefault());
+
+// The home screen (and the page itself on mobile) can scroll vertically, which
+// changes which cards are visible; re-check exposures after it settles.
+elements.homeScreen?.addEventListener("scroll", () => scheduleImpressionCheck(200), { passive: true });
+window.addEventListener("scroll", () => scheduleImpressionCheck(200), { passive: true });
 
 /* The accordion grows the hovered card to 16:9 to the right, so a card that
    sits near the right edge would expand out of the viewport and stay clipped.
@@ -2761,6 +3238,7 @@ function armStreamHover(card) {
   window.clearTimeout(streamHoverTimer);
   streamHoverTimer = window.setTimeout(() => {
     if (hoveredStreamCard !== card || stream.dragging) return;
+    homeEngagement.hovers += 1;
     setStreamExpanded(card, true);
     // start following the accordion shift only when it really expands
     trackAccordion(card);
@@ -2863,6 +3341,7 @@ function scheduleStreamMeasure(delay = 0) {
 
 window.addEventListener("resize", () => {
   scheduleStreamMeasure(120);
+  scheduleImpressionCheck(240);
   updateRailMask();
   sizeArtworkFrame();
   refreshArtworkResolution();
@@ -2876,6 +3355,7 @@ renderTimeline();
 runStream();
 handleRoute();
 routeHydrated = true;
+if (state.screen === "home") startHomeEngagement();
 // Reveal the routed screen only after it has been hydrated; otherwise a hard
 // refresh on a deep link paints the home stream (many large cards) first.
 window.requestAnimationFrame(() => document.documentElement.classList.remove("is-booting"));

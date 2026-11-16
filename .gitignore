@@ -3,3 +3,6 @@ preview/
 
 # macOS
 .DS_Store
+
+# local analytics collector data
+analytics/local/.data/

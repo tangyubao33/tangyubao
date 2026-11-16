@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:,">
+<title>唐尉保作品集 · 数据看板</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --bg-soft: #0f1217;
+    --card: #12151b;
+    --card-2: #171b23;
+    --line: #232a35;
+    --line-soft: #1a2029;
+    --text: #e8ebf0;
+    --muted: #8b94a3;
+    --dim: #5d6675;
+    --accent: #f2c14e;
+    --blue: #6ea8fe;
+    --green: #3ddc97;
+    --red: #ff6b6b;
+    --orange: #ffa94d;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 14px/1.55 "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 0 80px;
+  }
+  a { color: var(--blue); }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 18px;
+    padding: 16px 0;
+    background: rgba(11, 13, 16, .88);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #f2c14e 0%, #e8a33d 100%);
+    display: grid; place-items: center; color: #151007; font-weight: 800; font-size: 15px;
+    flex: 0 0 auto;
+  }
+  .brand h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+  .brand p { margin: 0; color: var(--muted); font-size: 11.5px; }
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 999px; font-size: 11.5px;
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .badge.demo::before { background: var(--orange); }
+  .badge.offline::before { background: var(--red); }
+  .range { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .range button {
+    appearance: none; border: 0; background: transparent; color: var(--muted);
+    font: inherit; font-size: 12.5px; padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  }
+  .range button[aria-pressed="true"] { background: #232a35; color: var(--text); }
+  .range button:disabled { opacity: .45; cursor: default; }
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 9px; cursor: pointer;
+  }
+  .btn:hover { border-color: #36404f; background: var(--card-2); }
+  .btn.primary { background: #f2c14e; color: #16110a; border-color: transparent; font-weight: 700; }
+  .btn.primary:hover { background: #ffd066; }
+
+  .notice {
+    margin: 20px 0 0; padding: 12px 16px; border-radius: 12px;
+    border: 1px solid #4a3a1f; background: #241c0f; color: #ffd899; font-size: 12.5px;
+  }
+  .notice.error { border-color: #51262b; background: #251214; color: #ffb3b3; }
+
+  .loading { display: grid; place-items: center; min-height: 55vh; color: var(--muted); gap: 12px; }
+  .loading[hidden] { display: none; }
+  .spinner {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid #2a3340; border-top-color: var(--accent);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .section-head { display: flex; align-items: baseline; gap: 12px; margin: 34px 0 14px; }
+  .section-head h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+  .section-head .hint { color: var(--dim); font-size: 12px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); gap: 12px; margin-top: 22px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 15px 16px 13px; min-height: 108px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .kpi-label { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .kpi-value { font-size: 26px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .kpi-sub { color: var(--dim); font-size: 11.5px; margin-top: auto; }
+  .delta { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .delta.up { color: var(--green); }
+  .delta.down { color: var(--red); }
+  .delta.flat { color: var(--dim); }
+  .delta.good-up.up, .delta.good-down.down { color: var(--green); }
+  .delta.good-up.down, .delta.good-down.up { color: var(--red); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; min-width: 0;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+  .card .card-sub { margin: 0 0 14px; color: var(--dim); font-size: 11.5px; }
+
+  .funnel { display: flex; flex-direction: column; gap: 9px; }
+  .funnel-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 78px 64px; align-items: center; gap: 10px; }
+  .funnel-row .label { color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
+  .funnel-track { height: 26px; background: #0d1015; border-radius: 7px; overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: 7px; background: linear-gradient(90deg, #6ea8fe, #4d7fd6); min-width: 2px; transition: width .4s ease; }
+  .funnel-row.convert .funnel-fill { background: linear-gradient(90deg, #f2c14e, #d99a2b); }
+  .funnel-row .num { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+  .funnel-row .step { color: var(--dim); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .chart { position: relative; width: 100%; min-height: 60px; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart .tooltip {
+    position: absolute; pointer-events: none; z-index: 5;
+    background: #1b212b; border: 1px solid #33404f; border-radius: 9px;
+    padding: 8px 10px; font-size: 11.5px; color: var(--text);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); min-width: 128px; display: none;
+    white-space: nowrap;
+  }
+  .chart .tooltip b { display: block; font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: 3px; }
+  .tooltip-row { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+  .tooltip-row i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0 10px; }
+  .legend button {
+    appearance: none; border: 0; background: transparent; color: var(--muted);
+    font: inherit; font-size: 11.5px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 2px 0;
+  }
+  .legend button i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .legend button[aria-pressed="false"] { opacity: .4; text-decoration: line-through; }
+
+  table.table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.table th {
+    text-align: right; color: var(--dim); font-weight: 500; font-size: 11.5px;
+    padding: 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  table.table th:first-child, table.table td:first-child { text-align: left; }
+  table.table td { padding: 9px 8px; border-bottom: 1px solid var(--line-soft); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.table tr:last-child td { border-bottom: 0; }
+  table.table tbody tr { cursor: default; }
+  table.table tbody tr.selectable { cursor: pointer; }
+  table.table tbody tr.selectable:hover td { background: #151a22; }
+  table.table tbody tr.is-selected td { background: #1a2130; }
+  table.table td .proj { display: flex; flex-direction: column; gap: 1px; text-align: left; }
+  table.table td .proj b { font-weight: 600; }
+  table.table td .proj small { color: var(--dim); font-size: 11px; }
+  .cellbar { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .cellbar span.bar { width: 64px; height: 5px; background: #232a35; border-radius: 3px; overflow: hidden; }
+  .cellbar span.bar i { display: block; height: 100%; background: var(--blue); border-radius: 3px; }
+  .muted { color: var(--dim); }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .warn { color: var(--orange); }
+
+  .mini-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin: 4px 0 16px; }
+  .mini { background: var(--bg-soft); border: 1px solid var(--line-soft); border-radius: 11px; padding: 10px 12px; }
+  .mini span { display: block; color: var(--dim); font-size: 11px; margin-bottom: 3px; }
+  .mini b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .mini small { display: block; color: var(--dim); font-size: 10.5px; margin-top: 2px; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .toolbar select {
+    appearance: none; background: var(--bg-soft); color: var(--text); border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 30px 7px 11px; font: inherit; font-size: 12.5px; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 51%, calc(100% - 11px) 51%;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  }
+  .toolbar .spacer { flex: 1; }
+
+  .reach { display: flex; align-items: flex-end; gap: 2px; height: 190px; padding: 10px 0 0; position: relative; }
+  .reach-bar {
+    flex: 1; min-width: 3px; border-radius: 3px 3px 0 0; position: relative;
+    background: linear-gradient(180deg, #6ea8fe 0%, #34578f 100%); cursor: default;
+    transition: filter .15s ease;
+  }
+  .reach-bar:hover { filter: brightness(1.25); }
+  .reach-bar.drop { background: linear-gradient(180deg, #ff6b6b 0%, #7d2f36 100%); }
+  .reach-axis { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 6px; }
+  .drop-note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .drop-note b { color: var(--red); }
+
+  .bars { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .bar-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 74px; gap: 10px; align-items: center; font-size: 12px; }
+  .bar-row .name { color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .track { height: 8px; background: #0d1015; border-radius: 4px; overflow: hidden; }
+  .bar-row .track i { display: block; height: 100%; border-radius: 4px; background: var(--blue); }
+  .bar-row .val { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .stat-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat { background: var(--bg-soft); border: 1px solid var(--line-soft); border-radius: 11px; padding: 11px 13px; }
+  .stat span { display: block; color: var(--dim); font-size: 11px; margin-bottom: 2px; }
+  .stat b { font-size: 19px; font-variant-numeric: tabular-nums; }
+  .stat small { display: block; color: var(--dim); font-size: 10.5px; margin-top: 2px; }
+  .divider { height: 1px; background: var(--line-soft); margin: 16px 0; }
+
+  .vitals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .vital { background: var(--bg-soft); border: 1px solid var(--line-soft); border-radius: 11px; padding: 11px 13px; }
+  .vital span { color: var(--dim); font-size: 11px; display: flex; justify-content: space-between; gap: 6px; }
+  .vital b { font-size: 20px; font-variant-numeric: tabular-nums; display: block; margin-top: 2px; }
+  .vital em { font-style: normal; font-size: 10.5px; color: var(--dim); }
+  .vital.good b { color: var(--green); }
+  .vital.mid b { color: var(--orange); }
+  .vital.bad b { color: var(--red); }
+
+  .errors { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .error-row { display: flex; align-items: flex-start; gap: 8px; font-size: 11.5px; color: var(--muted); }
+  .error-row b { color: var(--red); font-weight: 600; white-space: nowrap; }
+  .error-row code { color: var(--dim); word-break: break-all; }
+
+  .insights { display: flex; flex-direction: column; gap: 10px; }
+  .insight {
+    display: grid; grid-template-columns: 4px minmax(0, 1fr); gap: 13px;
+    background: var(--bg-soft); border: 1px solid var(--line-soft); border-radius: 12px; padding: 13px 15px;
+  }
+  .insight .flag { border-radius: 3px; background: var(--blue); }
+  .insight.high .flag { background: var(--red); }
+  .insight.medium .flag { background: var(--orange); }
+  .insight.low .flag { background: var(--blue); }
+  .insight h4 { margin: 0 0 3px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .insight .sev { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .insight.high .sev { color: #ffb3b3; border-color: #51262b; background: #251214; }
+  .insight.medium .sev { color: #ffd899; border-color: #4a3a1f; background: #241c0f; }
+  .insight p { margin: 0; font-size: 12px; color: var(--muted); }
+  .insight p + p { margin-top: 4px; }
+  .insight .action { color: #b9c6d8; }
+  .insight .action b { color: var(--accent); font-weight: 600; }
+
+  footer.foot { margin-top: 34px; color: var(--dim); font-size: 11.5px; line-height: 1.7; }
+  footer.foot b { color: var(--muted); font-weight: 600; }
+  .empty-state { border: 1px dashed var(--line); border-radius: var(--radius); padding: 44px 24px; text-align: center; color: var(--muted); margin-top: 28px; }
+  .empty-state b { color: var(--text); display: block; margin-bottom: 6px; font-size: 15px; }
+  details.defs { margin-top: 10px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+  details.defs summary { cursor: pointer; color: var(--muted); }
+  details.defs p { color: var(--dim); margin: 8px 0 0; }
+
+  @media (max-width: 1000px) {
+    .grid.two, .grid.three { grid-template-columns: minmax(0, 1fr); }
+    .kpis { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); }
+  }
+  @media (max-width: 680px) {
+    .wrap { padding: 0 16px; }
+    .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 0; }
+    .topbar-actions { width: 100%; margin-left: 0; }
+    .brand p { display: none; }
+    .funnel-row { grid-template-columns: 82px minmax(0, 1fr) 62px 52px; gap: 7px; }
+    .funnel-row .label { font-size: 11px; }
+    .kpi-value { font-size: 22px; }
+    table.table { font-size: 11.5px; }
+    table.table th, table.table td { padding: 7px 5px; }
+    .card { padding: 15px 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">唐</span>
+      <div>
+        <h1>作品集数据看板</h1>
+        <p>首页曝光 · 作品点击 · 浏览跳出 · 关于我 · 简历下载</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="badge" id="sourceBadge">连接中…</span>
+      <div class="range" role="group" aria-label="时间范围">
+        <button type="button" data-days="7">7 天</button>
+        <button type="button" data-days="14">14 天</button>
+        <button type="button" data-days="30" aria-pressed="true">30 天</button>
+        <button type="button" data-days="90">90 天</button>
+      </div>
+      <button class="btn" type="button" id="refreshBtn">刷新</button>
+      <button class="btn" type="button" id="exportBtn">导出 CSV</button>
+    </div>
+  </header>
+
+  <div id="notice"></div>
+  <div id="loading" class="loading"><span class="spinner" aria-hidden="true"></span><span>正在读取数据…</span></div>
+
+  <main id="content" hidden>
+    <div class="section-head">
+      <h2>总览</h2>
+      <span class="hint" id="rangeHint"></span>
+    </div>
+    <section class="kpis" id="kpis"></section>
+
+    <div class="section-head"><h2>转化漏斗</h2><span class="hint">按会话去重，同一访客多次打开只计一次</span></div>
+    <section class="grid two">
+      <div class="card">
+        <h3>访问 → 浏览</h3>
+        <p class="card-sub">从看到首页封面，到完整看完一个作品</p>
+        <div id="funnelBrowse" class="funnel"></div>
+      </div>
+      <div class="card">
+        <h3>访问 → 关于我 → 简历</h3>
+        <p class="card-sub">招聘方最关心的转化路径</p>
+        <div id="funnelConvert" class="funnel"></div>
+        <div class="divider"></div>
+        <div id="convertExtras" class="stat-list"></div>
+      </div>
+    </section>
+
+    <div class="section-head"><h2>趋势</h2><span class="hint">点击图例可切换指标</span></div>
+    <section class="card">
+      <div class="legend" id="trendLegend"></div>
+      <div class="chart" id="trendChart"></div>
+    </section>
+
+    <div class="section-head"><h2>首页曝光与点击</h2><span class="hint">曝光 = 封面 ≥50% 可见并停留 500ms</span></div>
+    <section class="card">
+      <div id="homeStats" class="stat-list"></div>
+      <div class="divider"></div>
+      <table class="table" id="homeTable">
+        <thead>
+          <tr>
+            <th>作品</th><th>曝光</th><th>点击</th><th>点击会话率</th><th>打开</th><th>打开/点击</th><th>点击率（次/曝光）</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <div class="section-head"><h2>作品内浏览与跳出</h2><span class="hint">逐页到达率、停留与流失位置</span></div>
+    <section class="card">
+      <div class="toolbar">
+        <label for="projectSelect" class="muted">选择作品</label>
+        <select id="projectSelect"></select>
+        <span class="spacer"></span>
+        <span class="muted" id="reachHint"></span>
+      </div>
+      <div class="mini-kpis" id="viewerKpis"></div>
+      <div id="reachChart"></div>
+      <div id="dropInfo"></div>
+      <div class="divider"></div>
+      <table class="table" id="projectTable">
+        <thead>
+          <tr>
+            <th>作品</th><th>打开</th><th>平均深度</th><th>平均停留</th><th>首屏跳出</th><th>看到末页</th><th>页码流失最大</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <div class="section-head"><h2>关于我 &amp; 简历</h2><span class="hint">入口、阅读深度与下载转化</span></div>
+    <section class="grid two">
+      <div class="card">
+        <h3>「关于我」弹窗</h3>
+        <p class="card-sub">打开率、停留、来源与阅读深度</p>
+        <div class="stat-list" id="aboutStats"></div>
+        <div class="divider"></div>
+        <div id="aboutSource"></div>
+        <div id="aboutFolds" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>简历下载</h3>
+        <p class="card-sub">下载次数、下载会话与转化率</p>
+        <div class="stat-list" id="resumeStats"></div>
+        <div class="divider"></div>
+        <div class="funnel" id="resumeFunnel"></div>
+        <p class="muted" style="margin:12px 0 0;font-size:11.5px">说明：点击下载按钮即计一次「下载意图」；浏览器是否真正保存文件无法可靠区分。</p>
+      </div>
+    </section>
+
+    <div class="section-head"><h2>访问结构</h2><span class="hint">设备、来源、性能与错误</span></div>
+    <section class="grid two">
+      <div class="card">
+        <h3>设备与来源</h3>
+        <p class="card-sub">会话占比；悬停设备行可看作品内表现</p>
+        <div id="deviceStats" class="stat-list"></div>
+        <div class="divider"></div>
+        <div id="deviceBars" class="bars"></div>
+        <div class="divider"></div>
+        <div id="referrerBars" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>性能与错误</h3>
+        <p class="card-sub">Web Vitals p75 与首屏资源体积</p>
+        <div class="vitals" id="vitals"></div>
+        <div class="divider"></div>
+        <div id="loadStats" class="stat-list"></div>
+        <div id="errors" class="errors"></div>
+      </div>
+    </section>
+
+    <div class="section-head"><h2>体验诊断</h2><span class="hint">基于当前数据自动生成，按严重程度排序</span></div>
+    <section class="card insights" id="insights"></section>
+
+    <footer class="foot">
+      <p><b>口径</b>　首页曝光 = 看到首页的会话（封面曝光 = 卡片 ≥50% 可见 500ms 的去重计次）；作品点击 = 首页/项目页点击封面；打开 = 进入作品查看器；首屏跳出 = 只看第 1 页就退出；平均深度 = 最远页码 / 总页数；关于我打开率 = 打开过弹窗的会话 / 全部会话；简历下载率 = 下载会话 / 全部会话。</p>
+      <p><b>隐私</b>　无 Cookie、不存 IP 与个人身份信息；仅保留随机访客 ID（localStorage）与 30 分钟会话 ID（sessionStorage）。</p>
+      <details class="defs">
+        <summary>数据来源与时间范围</summary>
+        <p id="metaLine"></p>
+        <p>趋势按北京时间（UTC+8）切日；示例数据为合成数据，仅用于演示看板与验证口径，不是真实访问量。</p>
+      </details>
+    </footer>
+  </main>
+</div>
+
+<script src="sample-summary.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var params = new URLSearchParams(location.search);
+  var API_PARAM = params.get("api");
+  var IS_HTTP = location.protocol === "http:" || location.protocol === "https:";
+  var REMOTE_BASE = API_PARAM !== null ? API_PARAM.replace(/\/$/, "") : (IS_HTTP ? "" : null);
+  var FORCE_DEMO = params.get("demo") === "1";
+
+  var state = {
+    days: 30,
+    data: null,
+    demo: false,
+    error: "",
+    projectKey: "",
+    trend: { sessions: true, home_views: false, impressions: false, card_clicks: true, viewer_opens: true, about_opens: false, resume_downloads: false }
+  };
+
+  var els = {
+    sourceBadge: document.getElementById("sourceBadge"),
+    notice: document.getElementById("notice"),
+    loading: document.getElementById("loading"),
+    content: document.getElementById("content"),
+    kpis: document.getElementById("kpis"),
+    funnelBrowse: document.getElementById("funnelBrowse"),
+    funnelConvert: document.getElementById("funnelConvert"),
+    convertExtras: document.getElementById("convertExtras"),
+    trendLegend: document.getElementById("trendLegend"),
+    trendChart: document.getElementById("trendChart"),
+    homeStats: document.getElementById("homeStats"),
+    homeTable: document.querySelector("#homeTable tbody"),
+    projectSelect: document.getElementById("projectSelect"),
+    reachHint: document.getElementById("reachHint"),
+    viewerKpis: document.getElementById("viewerKpis"),
+    reachChart: document.getElementById("reachChart"),
+    dropInfo: document.getElementById("dropInfo"),
+    projectTable: document.querySelector("#projectTable tbody"),
+    aboutStats: document.getElementById("aboutStats"),
+    aboutSource: document.getElementById("aboutSource"),
+    aboutFolds: document.getElementById("aboutFolds"),
+    resumeStats: document.getElementById("resumeStats"),
+    resumeFunnel: document.getElementById("resumeFunnel"),
+    deviceStats: document.getElementById("deviceStats"),
+    deviceBars: document.getElementById("deviceBars"),
+    referrerBars: document.getElementById("referrerBars"),
+    vitals: document.getElementById("vitals"),
+    loadStats: document.getElementById("loadStats"),
+    errors: document.getElementById("errors"),
+    insights: document.getElementById("insights"),
+    rangeHint: document.getElementById("rangeHint"),
+    metaLine: document.getElementById("metaLine")
+  };
+
+  var TREND_META = {
+    sessions: { label: "访问会话", color: "#6ea8fe" },
+    home_views: { label: "首页浏览", color: "#8b94a3" },
+    impressions: { label: "封面曝光", color: "#b58cff" },
+    card_clicks: { label: "作品点击", color: "#3ddc97" },
+    viewer_opens: { label: "作品打开", color: "#f2c14e" },
+    about_opens: { label: "关于我", color: "#ffa94d" },
+    resume_downloads: { label: "简历下载", color: "#ff6b6b" }
+  };
+
+  /* ---------------------------------------------------------------- helpers */
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char];
+    });
+  }
+  function fmtNum(value) {
+    var number = Number(value) || 0;
+    if (Math.abs(number) >= 10000) return (number / 10000).toFixed(1).replace(/\.0$/, "") + " 万";
+    return Math.round(number).toLocaleString("zh-CN");
+  }
+  function fmtPct(value, digits) {
+    var number = Number(value) || 0;
+    return number.toFixed(digits == null ? 1 : digits).replace(/\.0$/, "") + "%";
+  }
+  function fmtMs(value) {
+    var ms = Number(value) || 0;
+    if (ms < 1000) return Math.round(ms) + "ms";
+    if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + "s";
+    var minutes = Math.floor(ms / 60000);
+    var seconds = Math.round((ms % 60000) / 1000);
+    return minutes + "m " + seconds + "s";
+  }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    return iso.slice(5).replace("-", "/");
+  }
+  function delta(currentValue, previousValue, kind, goodDirection) {
+    var current = Number(currentValue) || 0;
+    var previous = Number(previousValue) || 0;
+    if (!previous) return { text: "—", tone: "flat", good: "flat" };
+    var diff = kind === "rate" ? current - previous : ((current - previous) / previous) * 100;
+    var tone = diff > 0.05 ? "up" : diff < -0.05 ? "down" : "flat";
+    var good = tone === "flat" ? "flat" : (goodDirection === "up" ? tone : goodDirection === "down" ? (tone === "up" ? "down" : "up") : "flat");
+    var text = (diff > 0 ? "+" : "") + diff.toFixed(kind === "rate" ? 1 : 0) + (kind === "rate" ? "pt" : "%");
+    return { text: text, tone: tone, good: good };
+  }
+  function kpi(label, value, sub, deltaInfo) {
+    var deltaHtml = deltaInfo && deltaInfo.text !== "—"
+      ? '<span class="delta ' + deltaInfo.good + '">' + esc(deltaInfo.text) + "</span>"
+      : '<span class="delta flat">—</span>';
+    return '<article class="kpi"><div class="kpi-label"><span>' + esc(label) + "</span>" + deltaHtml +
+      '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + (sub || "") + "</div></article>";
+  }
+  function stat(label, value, sub) {
+    return '<div class="stat"><span>' + esc(label) + "</span><b>" + value + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + "</div>";
+  }
+  function bars(container, items, options) {
+    var opts = options || {};
+    var max = Math.max(1, ...items.map(function (item) { return Number(item.value) || 0; }));
+    container.innerHTML = items.length
+      ? items.map(function (item) {
+        var width = Math.max(1, ((Number(item.value) || 0) / max) * 100);
+        var color = item.color || opts.color || "";
+        return '<div class="bar-row"><span class="name" title="' + esc(item.name) + '">' + esc(item.name) +
+          '</span><span class="track"><i style="width:' + width.toFixed(1) + "%;" + (color ? "background:" + color : "") +
+          '"></i></span><span class="val">' + esc(item.display != null ? item.display : fmtNum(item.value)) + "</span></div>";
+      }).join("")
+      : '<p class="muted" style="margin:0">暂无数据</p>';
+  }
+  function funnel(container, steps, tone) {
+    container.innerHTML = steps.map(function (step, index) {
+      var width = Math.max(2, Number(step.pct) || 0);
+      var stepPct = index === 0 ? 100 : (steps[index - 1].sessions > 0 ? (step.sessions / steps[index - 1].sessions) * 100 : 0);
+      return '<div class="funnel-row ' + (tone || "") + '"><span class="label">' + esc(step.label) +
+        '</span><span class="funnel-track"><i class="funnel-fill" style="width:' + width.toFixed(1) + '%"></i></span>' +
+        '<span class="num">' + fmtNum(step.sessions) + '</span><span class="step">' +
+        (index === 0 ? "—" : fmtPct(stepPct, 0) + " 转化") + "</span></div>";
+    }).join("");
+  }
+
+  /* ------------------------------------------------------------- data load */
+
+  function setNotice(html, isError) {
+    els.notice.innerHTML = html ? '<div class="notice' + (isError ? " error" : "") + '">' + html + "</div>" : "";
+  }
+
+  function applyDemo(message, isError) {
+    if (!window.SAMPLE_SUMMARY) {
+      setNotice("没有找到示例数据（analytics/sample-summary.js）。请先运行 <code>node analytics/tools/make-sample.mjs</code>，或给看板加 ?api= 指向 Collector。", true);
+      els.loading.innerHTML = "<span>没有数据源</span>";
+      return false;
+    }
+    state.demo = true;
+    state.data = window.SAMPLE_SUMMARY;
+    state.error = message || "";
+    if (message) setNotice(esc(message) + " 已切换到内置示例数据（合成数据，不是真实访问量）。", Boolean(isError));
+    else setNotice("当前展示的是<strong>内置示例数据</strong>（合成数据，用于演示看板与验证口径）。接入真实的 <code>/api/summary</code> 后这里会显示实时数据。");
+    return true;
+  }
+
+  function authToken() {
+    try { return sessionStorage.getItem("pf_dash_token") || ""; } catch (error) { return ""; }
+  }
+  function storeToken(token) {
+    try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* ignore */ }
+  }
+
+  async function fetchRemote(days, retry) {
+    var base = REMOTE_BASE || "";
+    var url = base + "/api/summary?days=" + days;
+    var headers = {};
+    var token = authToken();
+    if (token) headers.Authorization = "Bearer " + token;
+    var response = await fetch(url, { headers: headers, cache: "no-store" });
+    if (response.status === 401 || response.status === 503) {
+      if (!retry) {
+        var entered = window.prompt("请输入看板访问令牌（Worker 的 DASHBOARD_TOKEN）：", "");
+        if (entered) {
+          storeToken(entered.trim());
+          return fetchRemote(days, true);
+        }
+      }
+      throw new Error("需要看板访问令牌（401/503）");
+    }
+    if (!response.ok) throw new Error("数据接口返回 HTTP " + response.status);
+    return response.json();
+  }
+
+  async function load() {
+    els.loading.hidden = false;
+    els.content.hidden = true;
+    els.sourceBadge.className = "badge";
+    els.sourceBadge.textContent = "连接中…";
+
+    var remote = REMOTE_BASE !== null && !FORCE_DEMO;
+    if (remote) {
+      try {
+        var data = await fetchRemote(state.days);
+        if (!data || !data.current) throw new Error("数据格式不正确");
+        state.demo = false;
+        state.data = data;
+        state.error = "";
+        setNotice("");
+      } catch (error) {
+        applyDemo("无法连接实时数据源：" + (error.message || error) + "。", true);
+      }
+    } else {
+      applyDemo(FORCE_DEMO || IS_HTTP ? "" : "当前以文件方式打开，没有数据接口。");
+    }
+
+    if (!state.data) {
+      els.loading.innerHTML = "<span>没有可展示的数据</span>";
+      return;
+    }
+    document.querySelectorAll("[data-days]").forEach(function (button) {
+      button.disabled = state.demo;
+    });
+    if (!state.projectKey && state.data.current.projects.length) {
+      state.projectKey = state.data.current.projects[0].key;
+    }
+    render();
+    els.loading.hidden = true;
+    els.content.hidden = false;
+  }
+
+  /* ---------------------------------------------------------------- render */
+
+  function render() {
+    var data = state.data;
+    var current = data.current;
+    var previous = data.previous || { overview: {}, projects: [] };
+    var o = current.overview;
+    var p = previous.overview || {};
+
+    els.sourceBadge.className = "badge" + (state.demo ? " demo" : "");
+    els.sourceBadge.textContent = state.demo ? "示例数据 · 固定 30 天" : "实时数据 · 最近 " + state.days + " 天";
+
+    var rangeFrom = current.meta.from ? new Date(current.meta.from).toLocaleDateString("zh-CN") : "";
+    var rangeTo = current.meta.to ? new Date(current.meta.to).toLocaleDateString("zh-CN") : "";
+    els.rangeHint.textContent = rangeFrom ? rangeFrom + " – " + rangeTo + " · " + fmtNum(current.meta.event_count) + " 条事件" : "";
+
+    var sessions = o.sessions || 0;
+    var kpiRows = [
+      kpi("访问会话", fmtNum(sessions), "独立访客 " + fmtNum(o.visitors) + " · 平均 " + fmtMs(o.avg_session_ms), delta(o.sessions, p.sessions, "count", "up")),
+      kpi("首页曝光会话", fmtNum(o.home_sessions), "首页浏览 " + fmtNum(o.home_views) + " 次 · 封面曝光 " + fmtNum(o.impressions) + " 次", delta(o.home_sessions, p.home_sessions, "count", "up")),
+      kpi("作品点击", fmtNum(o.card_clicks), "点击会话率 " + fmtPct(o.click_session_rate), delta(o.card_clicks, p.card_clicks, "count", "up")),
+      kpi("作品打开", fmtNum(o.viewer_opens), "打开率 " + fmtPct(sessions ? (o.viewer_sessions / sessions) * 100 : 0), delta(o.viewer_opens, p.viewer_opens, "count", "up")),
+      kpi("平均浏览深度", fmtPct(o.viewer_avg_depth_pct), "平均 " + fmtMs(o.viewer_avg_ms), delta(o.viewer_avg_depth_pct, p.viewer_avg_depth_pct, "rate", "up")),
+      kpi("首屏跳出率", fmtPct(o.viewer_bounce_rate), "只看第 1 页就退出", delta(o.viewer_bounce_rate, p.viewer_bounce_rate, "rate", "down")),
+      kpi("关于我打开率", fmtPct(o.about_open_rate), fmtNum(o.about_open_sessions) + " / " + fmtNum(sessions) + " 会话", delta(o.about_open_rate, p.about_open_rate, "rate", "up")),
+      kpi("简历下载", fmtNum(o.resume_downloads), "下载率 " + fmtPct(o.resume_download_rate), delta(o.resume_downloads, p.resume_downloads, "count", "up")),
+      kpi("作品看完率", fmtPct(o.viewer_completion_rate), "看到最后一个内容页", delta(o.viewer_completion_rate, p.viewer_completion_rate, "rate", "up"))
+    ];
+    els.kpis.innerHTML = kpiRows.join("");
+
+    funnel(els.funnelBrowse, current.funnel.browse, "");
+    funnel(els.funnelConvert, current.funnel.convert, "convert");
+    els.convertExtras.innerHTML = [
+      stat("关于我停留均值", fmtMs(current.about.avg_ms), "弹窗内停留"),
+      stat("下载 / 打开", fmtPct(current.about.per_open), "每次打开带来下载"),
+      stat("主栏阅读深度", fmtPct(current.about.avg_main_scroll), "右栏滚动到底比例"),
+      stat("联系方式点击", fmtNum(current.actions.contact_clicks), "电话 / 邮箱")
+    ].join("");
+
+    renderTrend(current);
+    renderHome(current, previous);
+    renderViewer(current);
+    renderAbout(current);
+    renderStructure(current);
+    renderInsights(current, previous);
+    els.metaLine.textContent = "数据源：" + (state.demo ? "内置示例数据（合成）" : (REMOTE_BASE ? (REMOTE_BASE || location.origin) : "本地 collector")) +
+      " · 生成时间：" + new Date(current.meta.generated_at).toLocaleString("zh-CN") +
+      " · 事件 " + fmtNum(current.meta.event_count) + " 条 · 会话 " + fmtNum(current.meta.session_count) + " 个";
+    document.title = "数据看板 · " + fmtNum(sessions) + " 会话 · 唐尉保作品集";
+  }
+
+  function renderTrend(current) {
+    var legend = Object.keys(TREND_META).map(function (key) {
+      var meta = TREND_META[key];
+      return '<button type="button" data-series="' + key + '" aria-pressed="' + state.trend[key] + '"><i style="background:' +
+        meta.color + '"></i>' + meta.label + "</button>";
+    }).join("");
+    els.trendLegend.innerHTML = legend;
+
+    var days = state.demo ? 30 : state.days;
+    var byDate = {};
+    (current.daily || []).forEach(function (row) { byDate[row.date] = row; });
+    var today = new Date();
+    var labels = [];
+    var rows = [];
+    for (var index = days - 1; index >= 0; index -= 1) {
+      var date = new Date(today.getTime() - index * 86400000);
+      var key = date.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+      labels.push(key);
+      rows.push(byDate[key] || { date: key, sessions: 0, home_views: 0, impressions: 0, card_clicks: 0, viewer_opens: 0, about_opens: 0, resume_downloads: 0 });
+    }
+    var series = Object.keys(TREND_META).filter(function (key) { return state.trend[key]; }).map(function (key) {
+      return {
+        key: key,
+        label: TREND_META[key].label,
+        color: TREND_META[key].color,
+        values: rows.map(function (row) { return Number(row[key]) || 0; })
+      };
+    });
+    drawLineChart(els.trendChart, labels, series, rows);
+  }
+
+  function drawLineChart(host, labels, series, rows) {
+    host.innerHTML = "";
+    if (!labels.length || !series.length) {
+      host.innerHTML = '<p class="muted">没有可展示的指标</p>';
+      return;
+    }
+    var width = Math.max(320, host.clientWidth || 900);
+    var height = 300;
+    var pad = { top: 14, right: 18, bottom: 30, left: 42 };
+    var innerW = width - pad.left - pad.right;
+    var innerH = height - pad.top - pad.bottom;
+    var max = Math.max(1, ...series.flatMap(function (item) { return item.values; }));
+    max = Math.ceil(max * 1.12);
+    var x = function (index) { return labels.length <= 1 ? pad.left + innerW / 2 : pad.left + (index / (labels.length - 1)) * innerW; };
+    var y = function (value) { return pad.top + innerH - (value / max) * innerH; };
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "趋势折线图");
+    function add(name, attrs) {
+      var node = document.createElementNS(ns, name);
+      Object.keys(attrs).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+      svg.appendChild(node);
+      return node;
+    }
+    for (var grid = 0; grid <= 4; grid += 1) {
+      var value = (max / 4) * grid;
+      var gy = y(value);
+      add("line", { x1: pad.left, x2: width - pad.right, y1: gy, y2: gy, stroke: "#1c232d", "stroke-width": 1 });
+      var text = add("text", { x: pad.left - 8, y: gy + 3.5, fill: "#5d6675", "font-size": 10, "text-anchor": "end" });
+      text.textContent = value >= 1000 ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k" : Math.round(value);
+    }
+    var step = Math.max(1, Math.ceil(labels.length / 7));
+    labels.forEach(function (label, index) {
+      if (index % step !== 0 && index !== labels.length - 1) return;
+      var node = add("text", { x: x(index), y: height - 8, fill: "#5d6675", "font-size": 10, "text-anchor": "middle" });
+      node.textContent = fmtDate(label);
+    });
+    series.forEach(function (item) {
+      var d = item.values.map(function (value, index) { return (index === 0 ? "M" : "L") + x(index).toFixed(1) + " " + y(value).toFixed(1); }).join(" ");
+      if (item.values.length === 1) d = "M" + x(0) + " " + y(item.values[0]);
+      add("path", { d: d, fill: "none", stroke: item.color, "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round", opacity: 0.95 });
+      var lastIndex = item.values.length - 1;
+      add("circle", { cx: x(lastIndex), cy: y(item.values[lastIndex]), r: 2.6, fill: item.color });
+    });
+    var hoverLine = add("line", { x1: 0, x2: 0, y1: pad.top, y2: pad.top + innerH, stroke: "#3a4657", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
+    var tooltip = document.createElement("div");
+    tooltip.className = "tooltip";
+    host.appendChild(svg);
+    host.appendChild(tooltip);
+    var overlay = document.createElementNS(ns, "rect");
+    overlay.setAttribute("x", pad.left);
+    overlay.setAttribute("y", pad.top);
+    overlay.setAttribute("width", innerW);
+    overlay.setAttribute("height", innerH);
+    overlay.setAttribute("fill", "transparent");
+    svg.appendChild(overlay);
+    overlay.addEventListener("pointermove", function (event) {
+      var rect = svg.getBoundingClientRect();
+      var ratio = (event.clientX - rect.left) * (width / rect.width);
+      var index = Math.round(((ratio - pad.left) / innerW) * (labels.length - 1));
+      index = Math.max(0, Math.min(labels.length - 1, index));
+      hoverLine.setAttribute("x1", x(index));
+      hoverLine.setAttribute("x2", x(index));
+      hoverLine.setAttribute("opacity", "1");
+      var row = rows[index] || {};
+      tooltip.innerHTML = "<b>" + labels[index] + "</b>" + series.map(function (item) {
+        return '<div class="tooltip-row"><span><i style="background:' + item.color + '"></i> ' + esc(item.label) +
+          "</span><span>" + fmtNum(item.values[index]) + "</span></div>";
+      }).join("");
+      tooltip.style.display = "block";
+      var left = (x(index) / width) * rect.width;
+      tooltip.style.left = Math.max(4, Math.min(rect.width - tooltip.offsetWidth - 4, left + 12)) + "px";
+      tooltip.style.top = "10px";
+      void row;
+    });
+    overlay.addEventListener("pointerleave", function () {
+      tooltip.style.display = "none";
+      hoverLine.setAttribute("opacity", "0");
+    });
+  }
+
+  function renderHome(current, previous) {
+    var o = current.overview;
+    var home = current.home;
+    var scroll50 = (home.scroll_buckets || []).filter(function (bucket) { return bucket.bucket === 50; })[0];
+    els.homeStats.innerHTML = [
+      stat("首页停留均值", fmtMs(home.avg_ms), "每次进首页"),
+      stat("平均曝光封面", (home.avg_impressions || 0).toFixed(1), "张 / 次"),
+      stat("横向流拖动均值", (home.avg_drags || 0).toFixed(2), "次 / 次访问"),
+      stat("看到流 50% 的会话", fmtPct(scroll50 ? scroll50.pct : 0), "说明横向探索意愿"),
+      stat("无任何交互会话", fmtPct(o.no_interaction_rate), "只打开首页就离开"),
+      stat("点击会话率", fmtPct(o.click_session_rate), "曝光会话中点击")
+    ].join("");
+
+    var rows = current.projects.slice().sort(function (a, b) { return (b.impressions || 0) - (a.impressions || 0); });
+    els.homeTable.innerHTML = rows.map(function (row) {
+      var prevRow = (previous.projects || []).filter(function (item) { return item.key === row.key; })[0] || {};
+      var clickOpen = row.clicks ? (row.viewer_opens / row.clicks) * 100 : 0;
+      var deltaInfo = delta(row.ctr, prevRow.ctr, "rate", "up");
+      var rateWidth = Math.min(100, (row.click_session_rate / 40) * 100);
+      var deltaText = deltaInfo.text === "—" ? "" : '<small style="color:' +
+        (deltaInfo.good === "up" ? "var(--green)" : deltaInfo.good === "down" ? "var(--red)" : "var(--dim)") +
+        ';font-weight:500;margin-left:4px">' + esc(deltaInfo.text) + "</small>";
+      return "<tr>" +
+        '<td><span class="proj"><b>' + esc(row.name) + "</b><small>" + esc(row.company) + " · " + row.content + " 页</small></span></td>" +
+        "<td>" + fmtNum(row.impressions) + "</td>" +
+        "<td>" + fmtNum(row.clicks) + "</td>" +
+        '<td><span class="cellbar"><span class="bar"><i style="width:' + rateWidth.toFixed(1) +
+        '%"></i></span>' + fmtPct(row.click_session_rate) + "</span></td>" +
+        "<td>" + fmtNum(row.viewer_opens) + "</td>" +
+        "<td>" + (row.clicks ? fmtPct(clickOpen, 0) : "—") + "</td>" +
+        "<td>" + (row.impressions ? fmtPct(row.ctr) : "—") + deltaText + "</td>" +
+        "</tr>";
+    }).join("") || '<tr><td colspan="7" class="muted">暂无数据</td></tr>';
+  }
+
+  function renderViewer(current) {
+    var projects = current.projects || [];
+    if (!projects.some(function (project) { return project.key === state.projectKey; })) {
+      state.projectKey = projects[0] ? projects[0].key : "";
+    }
+    els.projectSelect.innerHTML = projects.map(function (project) {
+      return '<option value="' + esc(project.key) + '"' + (project.key === state.projectKey ? " selected" : "") + ">" +
+        esc(project.name) + " · " + project.content + " 内容页</option>";
+    }).join("");
+
+    var selected = projects.filter(function (project) { return project.key === state.projectKey; })[0] || projects[0];
+    if (!selected) return;
+    var reach = selected.slide_reach || [];
+    els.viewerKpis.innerHTML = [
+      stat("打开次数", fmtNum(selected.viewer_opens), "会话 " + fmtNum(selected.viewer_sessions)),
+      stat("平均深度", fmtPct(selected.avg_depth_pct), "最远页 / 总页数"),
+      stat("平均停留", fmtMs(selected.avg_ms), "单次打开"),
+      stat("首屏跳出", fmtPct(selected.bounce_rate), "只看第 1 页"),
+      stat("看到末页", fmtPct(selected.completion_rate), "最后一个内容页")
+    ].join("");
+
+    var barsHtml = reach.map(function (page) {
+      var height = Math.max(1.5, page.pct);
+      return '<span class="reach-bar" style="height:' + height + '%" title="第 ' + page.page + " 页 · 到达率 " +
+        fmtPct(page.pct) + " · 平均停留 " + fmtMs(page.dwell_ms) + '" data-page="' + page.page + '"></span>';
+    }).join("");
+    var axis = "";
+    var step = Math.max(1, Math.ceil(reach.length / 8));
+    for (var page = 1; page <= reach.length; page += step) axis += "<span>" + page + "</span>";
+    if (reach.length && (reach.length - 1) % step !== 0) axis += "<span>" + reach.length + "</span>";
+    els.reachChart.innerHTML = '<div class="reach" id="reachBars">' + barsHtml + '</div><div class="reach-axis">' + axis + "</div>";
+
+    if (selected.top_dropoff) {
+      var drop = selected.top_dropoff;
+      var dropBar = els.reachChart.querySelector('[data-page="' + drop.page + '"]');
+      if (dropBar) dropBar.classList.add("drop");
+      els.dropInfo.innerHTML = '<p class="drop-note">流失最大：<b>第 ' + Math.max(1, drop.page - 1) + " → " + drop.page + " 页</b>，流失 " +
+        fmtNum(drop.lost) + " 次（" + fmtPct(drop.pct_lost) + "）。" +
+        (drop.pct_lost > 40 ? "建议压缩该页前后内容或拆分信息层级。" : "节奏基本健康。") + "</p>";
+    } else {
+      els.dropInfo.innerHTML = "";
+    }
+    els.reachHint.textContent = selected.content + " 内容页 + THANK（共 " + selected.total + " 页）· 首屏跳出 " + fmtPct(selected.bounce_rate) + " · 看完 " + fmtPct(selected.completion_rate);
+
+    els.projectTable.innerHTML = projects.map(function (project) {
+      var selectedClass = project.key === state.projectKey ? " is-selected" : "";
+      return '<tr class="selectable' + selectedClass + '" data-key="' + esc(project.key) + '">' +
+        '<td><span class="proj"><b>' + esc(project.name) + "</b><small>" + esc(project.company) + " · " + project.total + " 页</small></span></td>" +
+        "<td>" + fmtNum(project.viewer_opens) + "</td>" +
+        "<td>" + fmtPct(project.avg_depth_pct) + "</td>" +
+        "<td>" + fmtMs(project.avg_ms) + "</td>" +
+        "<td>" + fmtPct(project.bounce_rate) + "</td>" +
+        "<td>" + fmtPct(project.completion_rate) + "</td>" +
+        "<td>" + (project.top_dropoff ? "第 " + project.top_dropoff.page + " 页（-" + fmtPct(project.top_dropoff.pct_lost, 0) + "）" : "—") + "</td>" +
+        "</tr>";
+    }).join("") || '<tr><td colspan="7" class="muted">暂无数据</td></tr>';
+  }
+
+  function renderAbout(current) {
+    var about = current.about;
+    var o = current.overview;
+    els.aboutStats.innerHTML = [
+      stat("打开次数", fmtNum(about.opens), "会话 " + fmtNum(about.open_sessions)),
+      stat("打开率", fmtPct(about.open_rate), "占全部会话"),
+      stat("弹窗停留均值", fmtMs(about.avg_ms), "打开到关闭"),
+      stat("阅读深度（主栏）", fmtPct(about.avg_main_scroll), "右栏滚动均值"),
+      stat("联系方式点击", fmtNum(about.contact.tel + about.contact.email), "电话 + 邮箱"),
+      stat("能力亮点展开", fmtNum(about.folds["about-highlights:open"] || 0), "最常展开的折叠")
+    ].join("");
+
+    var sourceItems = (about.by_source || []).map(function (item) {
+      return { name: item.name === "profile" ? "首页个人信息" : item.name === "header" ? "顶栏「关于我」" : item.name, value: item.count, display: fmtNum(item.count) + " · " + fmtPct(item.pct) };
+    });
+    els.aboutSource.innerHTML = '<p class="muted" style="margin:0 0 8px;font-size:11.5px">入口来源</p><div class="bars" id="aboutSourceBars"></div>';
+    bars(document.getElementById("aboutSourceBars"), sourceItems, { color: "#f2c14e" });
+
+    var foldItems = Object.keys(about.folds || {}).filter(function (key) { return key.indexOf(":open") > 0; }).map(function (key) {
+      var label = key.replace(":open", "").replace("about-highlights", "能力亮点").replace("jd-duties", "京东职责").replace("douyin-duties", "抖音职责");
+      return { name: label, value: about.folds[key], display: fmtNum(about.folds[key]) };
+    });
+    bars(els.aboutFolds, foldItems, { color: "#8b94a3" });
+
+    els.resumeStats.innerHTML = [
+      stat("下载次数", fmtNum(o.resume_downloads), "点击按钮"),
+      stat("下载会话", fmtNum(o.resume_download_sessions), "去重会话"),
+      stat("下载率（会话）", fmtPct(o.resume_download_rate), "占全部会话"),
+      stat("下载 / 关于我", fmtPct(about.per_open), "每个打开者"),
+      stat("关于我打开率", fmtPct(about.open_rate), ""),
+      stat("下载意图/打开", fmtPct(about.download_rate), "弹窗打开→下载")
+    ].join("");
+    funnel(els.resumeFunnel, [
+      { label: "访问网站", sessions: o.sessions, pct: 100 },
+      { label: "打开关于我", sessions: o.about_open_sessions, pct: o.about_open_rate },
+      { label: "下载简历", sessions: o.resume_download_sessions, pct: o.resume_download_rate }
+    ], "convert");
+  }
+
+  function renderStructure(current) {
+    var devices = current.devices || [];
+    var deviceLabels = { mobile: "手机", desktop: "桌面", tablet: "平板", "short-landscape": "横屏手机", unknown: "未知" };
+    els.deviceStats.innerHTML = devices.slice(0, 4).map(function (device) {
+      return stat(
+        deviceLabels[device.name] || device.name,
+        fmtPct(device.pct),
+        "作品打开 " + fmtNum(device.viewer_opens) + " · 跳出 " + fmtPct(device.bounce_rate)
+      );
+    }).join("") || stat("设备", "—", "");
+    bars(els.deviceBars, devices.map(function (device) {
+      return { name: deviceLabels[device.name] || device.name, value: device.sessions, display: fmtNum(device.sessions) + " · " + fmtPct(device.pct) };
+    }), { color: "#6ea8fe" });
+    bars(els.referrerBars, (current.referrers || []).map(function (item) {
+      return { name: item.name, value: item.sessions, display: fmtNum(item.sessions) + " · " + fmtPct(item.pct) };
+    }), { color: "#b58cff" });
+
+    var vitals = current.vitals || {};
+    function vital(label, value, unit, thresholds, format) {
+      var tone = value <= 0 ? "" : value <= thresholds[0] ? "good" : value <= thresholds[1] ? "mid" : "bad";
+      return '<div class="vital ' + tone + '"><span>' + label + "<em>" + (tone === "good" ? "良好" : tone === "mid" ? "需关注" : tone === "bad" ? "偏慢" : "") +
+        "</em></span><b>" + format(value) + unit + "</b></div>";
+    }
+    els.vitals.innerHTML = [
+      vital("LCP p75", vitals.lcp_p75, "ms", [2500, 4000], function (value) { return fmtNum(value); }),
+      vital("CLS p75", vitals.cls_p75, "", [0.1, 0.25], function (value) { return (Number(value) || 0).toFixed(3); }),
+      vital("INP p75", vitals.inp_p75, "ms", [200, 500], function (value) { return fmtNum(value); }),
+      vital("TTFB p75", vitals.ttfb_p75, "ms", [800, 1800], function (value) { return fmtNum(value); })
+    ].join("");
+    els.loadStats.innerHTML = [
+      stat("传输体积", fmtNum(current.load.avg_transfer_kb) + " KB", "首屏平均"),
+      stat("图片体积", fmtNum(current.load.avg_image_kb) + " KB", "首屏平均"),
+      stat("加载耗时", fmtMs(current.load.avg_load_ms), "load 事件"),
+      stat("请求数", fmtNum(current.load.avg_resources), "首屏平均"),
+      stat("性能样本", fmtNum(vitals.samples), "会话"),
+      stat("JS/资源错误", fmtNum(current.overview.errors), "累计")
+    ].join("");
+
+    var errors = current.errors || [];
+    els.errors.innerHTML = errors.length
+      ? '<div class="muted" style="font-size:11.5px;margin-top:14px">最近错误</div>' + errors.slice(0, 4).map(function (error) {
+        return '<div class="error-row"><b>' + esc(error.type) + "</b><span>x" + error.count + " · " +
+          esc(error.message || error.url || "") + "</span></div>";
+      }).join("")
+      : "";
+  }
+
+  /* -------------------------------------------------------------- insights */
+
+  function renderInsights(current, previous) {
+    var o = current.overview;
+    var insights = [];
+    var sessions = o.sessions || 0;
+    var mobile = (current.devices || []).filter(function (device) { return device.name === "mobile"; })[0];
+    var desktop = (current.devices || []).filter(function (device) { return device.name === "desktop"; })[0];
+    var scroll50 = (current.home.scroll_buckets || []).filter(function (bucket) { return bucket.bucket === 50; })[0];
+    var worstProject = (current.projects || []).slice().sort(function (a, b) { return (b.top_dropoff?.pct_lost || 0) - (a.top_dropoff?.pct_lost || 0); })[0];
+
+    function add(severity, title, evidence, action) {
+      insights.push({ severity: severity, title: title, evidence: evidence, action: action });
+    }
+
+    if (!sessions) {
+      els.insights.innerHTML = '<p class="muted">还没有真实数据。先按 README 部署 collector，并通过作品集产生一些访问；示例数据仅用于演示。</p>';
+      return;
+    }
+    if (sessions < 30) {
+      els.insights.innerHTML = '<p class="muted">当前只有 ' + fmtNum(sessions) +
+        " 个会话，样本量不足以判断体验问题（建议 ≥30 个会话，7 天后更有参考价值）。事件链路已经打通，先积累数据即可。</p>";
+      return;
+    }
+    if (o.home_sessions / Math.max(1, sessions) < 0.7) {
+      add("high", "首页曝光不足", "只有 " + fmtPct((o.home_sessions / sessions) * 100) + " 的会话看到了首页（" + fmtNum(o.home_sessions) + "/" + fmtNum(sessions) + "）。",
+        "检查分享链接是否大量直达作品内页；若是，属于正常深链行为，可单独统计深链来源。");
+    }
+    if (o.impression_sessions / Math.max(1, sessions) < 0.5) {
+      add("high", "作品封面露出不够", "只有 " + fmtPct((o.impression_sessions / sessions) * 100) + " 的会话看到过任意封面（曝光会话 " + fmtNum(o.impression_sessions) + "）。",
+        "首屏优先保证第一张封面完整可见；移动端在流下方加「滑动查看更多」提示或分页圆点。");
+    }
+    if (o.click_session_rate > 0 && o.click_session_rate < 6) {
+      add("medium", "封面点击率偏低", "看到封面的会话里只有 " + fmtPct(o.click_session_rate) + " 点击了作品（" + fmtNum(o.card_clicks) + " 次点击 / " + fmtNum(o.impressions) + " 次曝光）。",
+        "封面文案补充「项目类型 + 1 句成果」；首图避免纯文字；hover / 触摸反馈更明确。");
+    }
+    if (o.viewer_bounce_rate > 40) {
+      add("high", "打开作品后快速离开", "首屏跳出率 " + fmtPct(o.viewer_bounce_rate) + "（" + fmtNum(o.viewer_opens) + " 次打开）。",
+        "第 1 页增加「向下滚动查看完整案例」提示；打开后自动露出第 2 页边缘；减少加载等待（大图首屏优先 1280w）。");
+    }
+    if (o.viewer_avg_depth_pct > 0 && o.viewer_avg_depth_pct < 35) {
+      add("medium", "浏览深度偏浅", "平均只看到 " + fmtPct(o.viewer_avg_depth_pct) + " 的页码，平均停留 " + fmtMs(o.viewer_avg_ms) + "。",
+        "把最有价值的结论前置到前 3 页；长案例每 3–5 页插入一个阶段性结论页。");
+    }
+    if (o.viewer_completion_rate > 0 && o.viewer_completion_rate < 15) {
+      add("medium", "完整看完率低", "只有 " + fmtPct(o.viewer_completion_rate) + " 的打开看到了最后一个内容页。",
+        "确认作品页数（当前最长 38 页）是否都必要；给长案例加章节导航或「跳到结尾」入口。");
+    }
+    if (worstProject && worstProject.top_dropoff && worstProject.top_dropoff.pct_lost > 40 && worstProject.top_dropoff.lost >= 5) {
+      add("high", "单页流失明显", "「" + worstProject.name + "」第 " + worstProject.top_dropoff.page + " 页流失 " +
+        fmtPct(worstProject.top_dropoff.pct_lost, 0) + "（" + fmtNum(worstProject.top_dropoff.lost) + " 次）。",
+        "回看该页与前一页的衔接：是否出现大段文字、风格突变或信息重复，尝试拆成两页或直接删减。");
+    }
+    if (o.about_open_rate > 0 && o.about_open_rate < 10) {
+      add("medium", "「关于我」入口弱", fmtPct(o.about_open_rate) + " 的会话打开了关于我（" + fmtNum(o.about_open_sessions) + " 个会话）。",
+        "顶栏按钮可加轻微强调色；在首页个人信息旁加「查看完整简历」文案；作品末页 THANK 已带联系方式，可再加「下载简历」按钮。");
+    }
+    if (o.about_open_sessions > 0 && o.resume_download_rate < 5) {
+      add("high", "简历下载转化低", "下载仅占 " + fmtPct(o.resume_download_rate) + " 的会话；打开关于我的人里 " +
+        fmtPct(o.about.per_open) + " 下载了简历。", "下载按钮固定在左栏可见区域（移动端不要被滚动藏在底部）；文案明确「PDF · 735KB · 1 页」。");
+    }
+    if (mobile && desktop && mobile.bounce_rate - desktop.bounce_rate > 8) {
+      add("medium", "移动端作品体验更差", "手机首屏跳出 " + fmtPct(mobile.bounce_rate) + "，桌面 " + fmtPct(desktop.bounce_rate) +
+        "（差 " + fmtPct(mobile.bounce_rate - desktop.bounce_rate, 0) + "）。", "检查移动端首图清晰度、缩略图条位置与整屏手势；优先加载 1280w 变体。");
+    }
+    if (scroll50 && scroll50.pct < 35) {
+      add("low", "横向作品流探索不足", "只有 " + fmtPct(scroll50.pct) + " 的首页会话把横向流拖到 50% 之后。",
+        "在横向流右缘加渐隐 / 露出半张卡；移动端补「左右滑动」提示；键盘右箭头也可推进。");
+    }
+    if (current.vitals.lcp_p75 > 2500) {
+      add("high", "首屏加载偏慢", "LCP p75 = " + fmtMs(current.vitals.lcp_p75) + "，首屏图片平均 " + fmtNum(current.load.avg_image_kb) + " KB。",
+        "首屏只保留第一张封面并预加载；其余封面 `loading=lazy`；封面继续用 3200×1800 q84 但可再压 10–15%。");
+    }
+    if (o.errors > 0) {
+      add("medium", "存在资源 / JS 错误", "累计 " + fmtNum(o.errors) + " 次错误，最近如：" + esc((current.errors[0]?.message || current.errors[0]?.url || "-").slice(0, 80)) + "。",
+        "按错误列表逐条修复 404 图片或脚本异常，避免访客看到空白页。");
+    }
+    var direct = (current.referrers || []).filter(function (item) { return item.name === "直接访问"; })[0];
+    if (direct && direct.pct > 70) {
+      add("low", "来源高度集中", "直接访问占 " + fmtPct(direct.pct) + "，外部来源较少。",
+        "把作品集链接放到简历、LinkedIn、即刻、站酷等渠道；给不同渠道加 UTM，方便归因。");
+    }
+    if (o.avg_session_ms > 0 && o.avg_session_ms < 20000) {
+      add("low", "整体停留偏短", "平均会话有效时长 " + fmtMs(o.avg_session_ms) + "。",
+        "首页首屏讲清楚「谁 + 做了什么 + 结果」，让 HR 在 10 秒内知道该点哪个项目。");
+    }
+
+    var order = { high: 0, medium: 1, low: 2 };
+    insights.sort(function (a, b) { return order[a.severity] - order[b.severity]; });
+    var top = insights.slice(0, 8);
+    els.insights.innerHTML = top.length
+      ? top.map(function (insight) {
+        var label = insight.severity === "high" ? "高优" : insight.severity === "medium" ? "中优" : "观察";
+        return '<article class="insight ' + insight.severity + '"><span class="flag"></span><div><h4>' + esc(insight.title) +
+          '<span class="sev">' + label + '</span></h4><p>' + insight.evidence + '</p><p class="action"><b>建议：</b>' + insight.action + "</p></div></article>";
+      }).join("")
+      : '<p class="muted">当前数据没有触发明显问题；继续观察 7 天后的趋势与逐页流失。</p>';
+  }
+
+  /* ---------------------------------------------------------------- export */
+
+  function exportCsv() {
+    if (!state.data) return;
+    var current = state.data.current;
+    var lines = [];
+    lines.push("section,item,value");
+    function row(section, item, value) {
+      lines.push([section, item, value].map(function (cell) {
+        return '"' + String(cell == null ? "" : cell).replace(/"/g, '""') + '"';
+      }).join(","));
+    }
+    var o = current.overview;
+    row("总览", "会话", o.sessions);
+    row("总览", "独立访客", o.visitors);
+    row("总览", "首页曝光会话", o.home_sessions);
+    row("总览", "封面曝光", o.impressions);
+    row("总览", "作品点击", o.card_clicks);
+    row("总览", "作品打开", o.viewer_opens);
+    row("总览", "平均浏览深度%", o.viewer_avg_depth_pct);
+    row("总览", "首屏跳出率%", o.viewer_bounce_rate);
+    row("总览", "关于我打开率%", o.about_open_rate);
+    row("总览", "简历下载", o.resume_downloads);
+    row("总览", "简历下载率%", o.resume_download_rate);
+    current.funnel.browse.forEach(function (step) { row("浏览漏斗", step.label, step.sessions); });
+    current.funnel.convert.forEach(function (step) { row("转化漏斗", step.label, step.sessions); });
+    current.projects.forEach(function (project) {
+      row("作品", project.name + " · 打开", project.viewer_opens);
+      row("作品", project.name + " · 平均深度%", project.avg_depth_pct);
+      row("作品", project.name + " · 首屏跳出%", project.bounce_rate);
+      row("作品", project.name + " · 完成率%", project.completion_rate);
+    });
+    current.daily.forEach(function (day) {
+      row("每日", day.date + " · 会话", day.sessions);
+      row("每日", day.date + " · 曝光", day.impressions);
+      row("每日", day.date + " · 点击", day.card_clicks);
+      row("每日", day.date + " · 下载", day.resume_downloads);
+    });
+    var blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "portfolio-analytics-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(link.href); link.remove(); }, 1000);
+  }
+
+  /* ------------------------------------------------------------------ wire */
+
+  document.querySelectorAll("[data-days]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (state.demo) return;
+      document.querySelectorAll("[data-days]").forEach(function (item) {
+        item.setAttribute("aria-pressed", String(item === button));
+      });
+      state.days = Number(button.dataset.days);
+      load();
+    });
+  });
+  els.trendLegend.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-series]");
+    if (!button) return;
+    var key = button.dataset.series;
+    state.trend[key] = !state.trend[key];
+    button.setAttribute("aria-pressed", String(state.trend[key]));
+    renderTrend(state.data.current);
+  });
+  els.projectSelect.addEventListener("change", function () {
+    state.projectKey = els.projectSelect.value;
+    renderViewer(state.data.current);
+  });
+  document.querySelector("#projectTable").addEventListener("click", function (event) {
+    var row = event.target.closest("tr[data-key]");
+    if (!row) return;
+    state.projectKey = row.dataset.key;
+    renderViewer(state.data.current);
+  });
+  document.getElementById("refreshBtn").addEventListener("click", load);
+  document.getElementById("exportBtn").addEventListener("click", exportCsv);
+  window.addEventListener("resize", function () {
+    if (!state.data) return;
+    clearTimeout(window.__dashResize);
+    window.__dashResize = setTimeout(function () {
+      renderTrend(state.data.current);
+      renderViewer(state.data.current);
+    }, 200);
+  });
+  if (state.demo) {
+    document.querySelectorAll("[data-days]").forEach(function (button) { button.disabled = true; });
+  }
+  load();
+})();
+</script>
+</body>
+</html>

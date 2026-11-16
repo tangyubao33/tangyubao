@@ -9,6 +9,7 @@
 - 数据驱动：所有经历、项目、封面、图标都在 `script.js` 顶部的 `experiences` 对象里维护。
 - 本地预览：`node ../.qa/serve.mjs . 8099`（或 `python3 -m http.server 8099`），打开 http://127.0.0.1:8099 。
 - 三个屏幕：`home`（首页 + 横向作品流）、`projects`（经历下的项目导航）、`viewer`（作品翻页浏览）。
+- 埋点与看板在 `analytics.js` + `analytics/`，**不参与站点构建、可整体移除**；后台（Cloudflare Worker + D1）与看板独立部署，站点仍是纯静态。
 - 部署：GitHub Pages 通过 `.github/workflows/pages.yml` 以 Actions 方式整站发布（`build_type=workflow`）；仓库位于 `tangyubao33/tangyubao`（GitHub 用户名已改为 `tangyubao33`），线上地址 https://tangyubao33.github.io/tangyubao/ 。
 
 ## 2. 文件职责
@@ -17,7 +18,9 @@
 |---|---|
 | `index.html` | 三个屏幕的静态骨架、固定头部、「关于我」弹窗（个人简介 + 项目经历） |
 | `styles.css` | 基础样式 + “Editorial interaction layer” 覆盖层 + 响应式断点（≤760px / 1100px / ≤720px 高 / ≤520px 高） |
-| `script.js` | 数据、hash 路由、横向工作流（阻尼/拖拽）、查看器、缩略图、「关于我」弹窗、焦点管理 |
+| `script.js` | 数据、hash 路由、横向工作流（阻尼/拖拽）、查看器、缩略图、「关于我」弹窗、焦点管理；同时是埋点触发点（卡片曝光/点击、查看器、关于我、简历下载等） |
+| `analytics.js` | 无依赖埋点采集器（无 cookie、批量上报、心跳/Web Vitals/错误、DNT/GPC 降级）；未配置 endpoint 时只写本地调试环 |
+| `analytics/` | 埋点数据层：共享聚合 `summary.js`、本地 collector `local/`、Cloudflare Worker `worker/`、自包含看板 `dashboard.html`、示例数据与工具；说明见 `analytics/README.md`、分析见 `analytics/体验分析报告.md`。不参与 GitHub Pages 站点构建，但会随仓库发布 |
 | `assets/fonts/` | Caveat / Kalam woff2（手写体强调） |
 | `assets/marks/` | 三家公司图标：第一段经历用 `douyin.webp`（抖音，黑底圆角 + 音符，183px）、`jd.webp`、`kingsoft.webp`；均为 180–183px RGBA 透明圆角。`bytedance.webp`（字节跳动蓝色柱状标）保留但已不再引用 |
 | `assets/thumbs/` | 卡片封面（允许压缩）：抖音四个项目 + 金山词霸由 5760×3240 设计稿压成 `douyin-platform / douyin-ai-cover / douyin-other / douyin-ai-practice / mobile.jpg`（3200×1800 JPEG q84，~370–520 KB）；JD 由 `唐尉保作品集2_files/图片1.png`（3840×2160）导出同规格 `jd.jpg`。高分辨率是为了让竖长裁切 + 2× DPR 的卡片不糊 |
@@ -94,7 +97,7 @@
 - 查看器信息条：从左到右「返回（< 箭头）→ 浅色分割线 → 项目名 → 公司·时间段 → 当前页/总页数」，三处文字统一 14px；查看器状态下导航栏隐藏 TEL/E-MAIL（保留「关于我」入口），作品区不再有独立信息行。
 - 横向作品流：滚轮/拖拽带阻尼；拖拽后 400ms 内抑制误触点击。
 - 首页卡片 → 预览：点击后把卡片封面克隆成固定层，从卡片位置 FLIP 到作品框；在卡片尺寸阶段（约 0–200ms）就把封面溶解为第一页，页面层随扩张逐步还原为完整画面，膨胀结束与预览图同帧交接（交接前后像素 diff 为 0）。`prefers-reduced-motion` 下退化为原有淡入；中途 Esc/返回会清理过渡层。
-- 预览翻页：上下滑动/滚轮/键盘/缩略图翻页时，旧页向一侧滑出（位移 -100%、scale .98），新页从另一侧滑入（±100% → 0、scale 1.02 → 1），640ms `cubic-bezier(.76,0,.24,1)`；新图预加载完成后才启动动画；`prefers-reduced-motion` 直接切换。
+- 预览翻页：上下滑动/滚轮/键盘/缩略图翻页时，旧页向一侧滑出（位移 -100%，**不做 scale 缩小**——缩小会在页面之间留下 1% 缝隙，浅色旧页滑到深色 THANK 时露出白色接缝），新页从另一侧滑入（±100% → 0、scale 1.02 → 1），640ms `cubic-bezier(.76,0,.24,1)`；新图预加载完成后才启动动画；`prefers-reduced-motion` 直接切换。
 - 预览全屏：舞台右上角为胶囊按钮（图标 + 文案「全屏浏览 / 退出全屏」，`aria-pressed` + 动态 `aria-label`）；进入/退出用克隆层几何过渡（460ms），优先 Fullscreen API，不支持或被拒绝时降级 `.is-pseudo-fullscreen`（fixed inset 0、z-index 90）。全屏下隐藏缩略图条与站点导航、舞台 padding 归零，作品按视口最大化铺满屏幕（16:9 屏幕上正好满屏，其他比例保留等比留边）；退出按钮与页码浮在画面上、不占布局（按钮距屏幕底部 10px，页码在右下角），两者在 2.4s 无操作后一起淡出（0.35s），指针/触摸/键盘唤醒；Esc 先退出全屏、再按一次返回上一级，离开预览自动退出。非全屏时按钮放在大图下方独立的 `.artwork-toolbar` 列中（与 `.artwork-frame` 同宽、水平居中），距图片下边缘 16px，随大图尺寸变化，不覆盖图片、不锚定舞台或视口；全屏时该工具栏改为画面底部浮层。
 - **全屏翻页手势**：全屏时**左键单击画面 = 下一页/下一层**，**右键单击 = 上一页/上一层**（`contextmenu` 先阻止浏览器菜单再翻页）；点击链接热区、按钮、视频控件、复合页媒体层时不翻页，交由其自身处理。非全屏不启用该手势。
 - 预览退出：从预览返回首页时，若来源是首页卡片且卡片仍可见，作品图以同样的 660ms 缓动缩回卡片位置；**缩到卡片尺寸之后**，再在卡片尺寸处柔和溶解回封面并交给首页（不允许先换封面再缩放）；卡片不可见时退化为普通淡出。缩略图栏按所在边缘滑出。
@@ -102,8 +105,8 @@
 - 缩略图居中：翻页/滚轮时用 160ms 防抖 + 自定义 `scrollTo`，连续翻页或大图加载中不追帧，停止后再平滑居中一次；禁止每次 `showSlide` 直接 `scrollIntoView({behavior:"smooth"})`，否则会出现上下跳。
 - 缩略图数量少于 15 张且能在轨道内完整容纳时，右侧纵向轨道上下居中、竖屏底部横排左右居中（`is-short-list`）；放不下时仍从顶部/左侧开始滚动。
 - **页面链接热区**：页面可带 `links: [{ x, y, w, h, href, label }]`（百分比坐标），渲染为作品框内的透明 `<a target="_blank">`；悬停/聚焦显示浅色高亮，点击新窗口打开。翻页/层切换开始时清空、交接完成后重建；全屏下同样可点，且不会触发全屏翻页。详见 §3.11。
-- 最后一页其他项目：在项目的**最后内容页与 THANK 页**都出现（THANK 不是位图，若只在 THANK 上出现，翻到它时会在翻页动画进行中同时缩小作品框，Safari 会出现白边/抖动；把面板提前到最后一页内容页、两页保持同一框尺寸即可避免）；底部滑出「其他项目」面板（隐藏时 `visibility: hidden` 且被舞台裁剪，平时不占布局、不影响大图尺寸），按经历顺序（抖音 → 京东零售 → 金山办公）列出其他可预览项目；卡片从下往上逐个出现（index² 抛物线延迟）；点击用「缩略图 → 大图」克隆层过渡切换到该项目第 1 页；全屏下隐藏；滚轮在面板上横向滚动、不触发翻页。
-- 最后一页避让：面板展开时必须为它预留高度——`sizeArtworkFrame()` 用 `otherProjectsReserve()`（`panel.offsetHeight + 14px`）压缩大图可用高度，并按居中公式把 `.artwork-stack` 上移（CSS 变量 `--stack-shift`），保证「大图 + 全屏按钮」整体落在面板上方（按钮距面板 14px）；与面板 550ms 同时动画（`.is-panel-adjusting` 期间给 `.artwork-frame` 加宽高过渡，栈位移本身有过渡）。**面板状态在翻页过程中变化时，等 640ms 翻页动画结束（约 700ms）后再展开/收起**，避免作品框在转场中被缩放；直接跳页（direction 0）立即生效。离开末页/进全屏时 reserve 归零并复位位移。短屏（`max-height: 520px`）面板同时压缩卡片与内边距，避免把大图挤得过小。
+- 最后一页其他项目：**只在真正的最后一页（THANK 页）出现**；底部滑出「其他项目」面板（隐藏时 `visibility: hidden` 且被舞台裁剪，平时不占布局、不影响大图尺寸），按经历顺序（抖音 → 京东零售 → 金山办公）列出其他可预览项目；卡片从下往上逐个出现（index² 抛物线延迟）；点击用「缩略图 → 大图」克隆层过渡切换到该项目第 1 页；全屏下隐藏；滚轮在面板上横向滚动、不触发翻页。
+- 最后一页避让：面板展开时必须为它预留高度——`sizeArtworkFrame()` 用 `otherProjectsReserve()`（`panel.offsetHeight + 14px`）压缩大图可用高度，并按居中公式把 `.artwork-stack` 上移（CSS 变量 `--stack-shift`），保证「大图 + 全屏按钮」整体落在面板上方（按钮距面板 14px）；与面板 550ms 同时动画（`.is-panel-adjusting` 期间给 `.artwork-frame` 加宽高过渡，栈位移本身有过渡）。**面板状态在翻页过程中变化时，等 640ms 翻页动画结束（约 700ms）后再展开/收起**，避免作品框在翻页动画中被缩放（这是白边/抖动的来源）；直接跳页（direction 0）与 `prefers-reduced-motion` 立即生效。离开末页/进全屏时 reserve 归零并复位位移。短屏（`max-height: 520px`）面板同时压缩卡片与内边距，避免把大图挤得过小。
 
 ### 3.7 动效与过渡规范（全局）
 
@@ -209,10 +212,21 @@
 
 - **形态**：每个项目的最后一页固定追加一页 `type: "thank"` 的收尾页（**DOM 渲染，不是图片**），版式对齐旧的「THANKS」收尾页（2026-11-16 改）：深色底上**居中**排一列大字 `THANKS`（Arial 600、大写），下方居中「唐尉保 · UI/UX DESIGNER」，再下方一行 `TEL：189113300923 ｜ E-MAIL：834316142@qq.com`（两条都是真实 `mailto:` / `tel:` 链接，全屏下也可点，中间为 1px 渐隐竖线）。参考图里是「UI/UE」，站点统一用「UI/UX」。内容统一写在 `index.html` 的 `.thank-slide` 里，数据侧只加一个 `{ type: "thank" }` 标记。
 - **注入方式**：`script.js` 在「封面即第 1 页」的归一化之后，给每个有 slides 的项目 `push` 一份 `THANK_SLIDE`；因此它永远是最后一个页面。项目卡片上的「N PAGES」用 `contentPageCount()` 排除 thank（封面页数不变，如抖音创作服务平台仍是 24），查看器页码则包含 thank（25 / 25）。
-- **查看器接入**：`placeArtwork()` / `moveArtwork()` 对 thank 单独分支——进入时把 `<img data-main-artwork>` 清空、`.thank-slide` 取消 `hidden`，旧页留在 ghost 上做 **340ms 交叉淡出**（不做上下滑动：白底内容页滑过深色 THANK 时上缘会露出白带，且旧实现同时缩放作品框会在 Safari 里抖动）；离开 thank 时没有位图可滑出，改为 0.3s 淡出；`prefers-reduced-motion` 直接切换；加载遮罩、占位缩略图、响应式选档都跳过 thank；离开查看器时隐藏 `.thank-slide`。
+- **查看器接入**：`placeArtwork()` / `moveArtwork()` 对 thank 单独分支——**与其他页完全一致**：进入时把 `<img data-main-artwork>` 清空、`.thank-slide` 取消 `hidden`，旧页留在 ghost 上按 640ms `cubic-bezier(.76,0,.24,1)` 向上滑出，THANK 从下方（反向切换则从上方）滑入；离开时没有位图可以放 ghost，改为由 **THANK 层本身滑出**、新页图片从另一侧滑入（同样 640ms）；`prefers-reduced-motion` 直接切换；加载遮罩、占位缩略图、响应式选档都跳过 thank；离开查看器时隐藏 `.thank-slide`。
 - **缩略图**：thank 缩略图是 THANK 页的**等比缩略版**（`.thumbnail-thank`）：暗底 + 居中 `THANKS`（Arial 600）+「唐尉保 · UI/UX DESIGNER」+「TEL：… ｜ E-MAIL：…」，三行都收在缩略图内、不压右下角页码；`aria-label` 为「查看感谢页」。
 - **字号自适应**：`.thank-slide` 的字体/间距全部按 `--frame-unit`（`sizeArtworkFrame()` 写入的「1% 页宽」）缩放，并加 `clamp()` 上下限；实测 1920×1080 / 1440×900 / 1280×800 / 1024×768 / 768×1024 / 390×844 / 320×568 / 844×390 八个视口内容都落在作品框内（含矮横屏 245×138 的小框），无溢出。
-- **末页「其他项目」面板**：在最后内容页与 THANK 页都显示（两页作品框尺寸一致，翻到 THANK 时不再发生框尺寸变化）；面板展开时按原有逻辑为它预留高度、压缩并上移作品栈，THANK 内容整体落在面板上方。
+- **末页「其他项目」面板**：只在 THANK 页显示；翻到 THANK 时面板/作品框的尺寸变化会等 640ms 翻页动画结束后再做（见 §3.6 最后一页避让），因此滑动过程本身是稳定的 640ms 上/下翻页。
+
+### 3.13 埋点与数据看板
+
+- **定位**：站点仍是纯静态、零依赖、无构建；`analytics.js` 是唯一新增运行时文件，`analytics/` 是独立数据层。全部埋点调用都经 `track()` 空值保护，analytics.js 被拦截/加载失败时页面功能不受影响，不得因此加 polyfill 或第三方 SDK。
+- **事件模型**：`page_view`、`screen_view`、`home_view`/`home_exit`、`card_impression`（≥50% 可见 500ms，每页加载去重）、`card_click`、`stream_scroll`、`viewer_open`/`viewer_slide`/`viewer_exit`、`about_open`/`about_close`/`about_fold`、`resume_download`、`contact_click`、`link_click`、`fullscreen_toggle`、`video_play`、`stack_step`、`other_project_click`、`heartbeat`、`session_end`、`web_vitals`、`page_load`、`error`。完整字段见 `analytics/README.md §3`。
+- **会话口径**：30 分钟无操作即新会话（`sessionStorage`）；查看器以「打开→离开」为一个 viewer session（`viewer_id`），页面深度/停留/跳出按 viewer session 聚合，不靠事件顺序猜。会话时长用 `active_ms`（隐藏标签页不计）。
+- **隐私红线**：无 Cookie、不存 IP/UA/指纹/输入内容、不接第三方；只保留匿名 `vid`、会话 `sid`、页面事件与白名单 props；DNT/GPC 默认直接关闭（无网络、无本地环）；数据保留 180 天。看板令牌只放 Authorization/sessionStorage，禁止写进公开链接。
+- **数据端**：`analytics/summary.js` 是**唯一聚合实现**，Worker 与本地 collector 共用；改指标只改这里。看板只读 `/api/summary` 的 `{current, previous}` 契约。`PROJECTS` 是看板作品表注册表，新增作品必须同步（否则事件仍记录但作品表/逐页图不出现）。
+- **新增/修改事件顺序**：`analytics.js`（采集）→ `script.js`（触发）→ `summary.js`（聚合）→ `dashboard.html`（呈现）→ `tools/generate.mjs`（示例）→ `node analytics/tools/make-sample.mjs` → `node analytics/tools/verify-summary.mjs`。改 `script.js`/`analytics.js` 时同步提升 `?v=` 版本号。
+- **本地验收**：`node analytics/local/server.mjs --seed` 起站与 collector；看板 `http://127.0.0.1:8788/dashboard` 与 `?demo=1` 都必须无 JS 报错、KPI/漏斗/逐页图有值。至少人工走一遍「首页→曝光→点击→翻页→关于我→下载」并核对 `/api/raw`。8 个基准视口、analytics.js 被拦截、DNT、`file://` 双击打开均要回归。
+- **运维边界**：Worker 部署在 Cloudflare，绑定自定义域名（`workers.dev` 国内部分网络不可达）；cron 清理 180 天前数据；备份用 `wrangler d1 export`；删除访客数据用 `DELETE FROM events WHERE vid=…`。看板 `noindex`、不含真实数据文件，但源码公开，访问控制依赖 `DASHBOARD_TOKEN`。
 
 ## 4. 工作流规则（每次改动必须执行）
 
@@ -242,6 +256,11 @@
 - `assets/demo/ppt-demo.png` + `assets/slide-thumbs/demo-01.jpg` 保留为 `.qa/media/compose.html` 的默认测试素材，不在站点里引用。
 - 占位项目（抖音分成 / 抖音精选 / 黄金眼 / 小米邮箱 / WPS Office）已从数据里移除；`disabled` 兜底与未知项目回退逻辑保留，`#project/douyin/douyin-revenue` 现在回退到该项目导航页。
 - PNG 图层已在代码与编辑器里跑通，但**还没接过真实的分层 PPT**；真实 `.pptx` 到手后先用 `.qa/media/pptx2layers.py` 对一遍坐标再入库。
+- 埋点 endpoint 尚未配置：`index.html` 的 meta 占位仍是注释、`analytics.js` 的 `ANALYTICS_ENDPOINT` 为空，线上当前**不会上报**；按 `analytics/README.md §4` 部署 Worker 后填一处即可。
+- Cloudflare Worker/D1 尚未实际部署过（本地 collector 与 mock D1 已跑通路由与聚合）；首次部署后要按 README 的验收清单核对 `/health`、`/collect`、`/api/summary`。
+- `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
+- 看板首屏性能建议（来自 2026-11-16 实测）：桌面首载约 2.9 MB / 图片 2.6 MB，移动 2.1 MB / 图片 1.8 MB，主要来自 6 张 3200×1800 封面；`loading="lazy"` 会提前加载多张。建议后续补 640/960/1280/1920 的封面 `srcset`（AVIF/WebP）并只预加载首张，具体见 `analytics/体验分析报告.md §5 P0-1`。
+- 埋点口径的已知局限（下载点击≠保存成功、DNT 不上报、无跨设备、会话 30 分钟上限、THANK 页计入总页数等）集中写在 `analytics/体验分析报告.md §7`，对外解释数据时以此为准。
 
 ## 6. 变更记录（主题合并）
 
@@ -299,7 +318,7 @@
 - 缩略图轨道居中做 160ms 防抖，仅在一次翻页序列结束后平滑滚动，避免加载中连续滚轮造成上下抖动。
 - 全屏优先使用 Fullscreen API，失败时降级为伪全屏；全屏时作品铺满整个视口，退出按钮与页码改为浮层（按钮距底 10px、页码右下角），随 2.4s 空闲一起隐藏；Esc 先退出全屏再返回上级。
 - 全屏阅读手势：左键单击画面翻到下一页/下一层，右键单击翻回上一页/上一层；热区、按钮、视频控件与媒体层不触发翻页。
-- 「其他项目」面板在最后内容页与 THANK 页出现；翻页过程中需要改变面板状态时，等翻页动画结束后再展开/收起，避免作品框在转场中被缩放。展开时为面板预留空间并同步压缩、上移作品栈，保证图片、工具栏和面板不重叠。
+- 「其他项目」面板只在最后一页（THANK）出现；翻到 THANK 时等翻页动画结束后再展开/收起，避免作品框在转场中被缩放。展开时为面板预留空间并同步压缩、上移作品栈，保证图片、工具栏和面板不重叠。
 - 所有临时克隆层、定时器、隐藏类和媒体实例都必须在中断、返回、切页或退出时清理。
 - 页面链接热区（`links`）盖在作品图上，百分比坐标跟随页面缩放；新窗口打开产品地址，翻页与层切换开始时清空、交接后重建，避免旧页热区在过渡中残留。
 
@@ -332,8 +351,14 @@
 
 - **2026-11-16**：THANK 收尾页版式按旧「THANKS」页面重排——深色背景保留，内容改为居中一列：大字 `THANKS` → 「唐尉保 · UI/UX DESIGNER」→ `TEL：189113300923 ｜ E-MAIL：834316142@qq.com`（链接可点）；去掉原来的手写 Thank you / 感谢观看 / 引导语 / 签名，仍在 8 个基准视口与矮横屏内完整显示。细节见 §3.12。
 
-- **2026-11-16**：THANK 页收尾打磨——缩略图改为与深色大图一致的 `THANKS` 迷你版（三行文案收在瓦片内，不再只手写「THANK」）；进入 THANK 的翻页改为 340ms 交叉淡出（白底页不再滑过深色页、无白边），THANK 退出 0.3s 淡出；「其他项目」面板提前到最后一页内容页开启、并在翻页动画结束（约 700ms）后才展开/收起，使 THANK 转场期间作品框尺寸不变，消除 Safari 白边与抖动。细节见 §3.6 / §3.12。
+- **2026-11-16**：THANK 页收尾打磨——缩略图改为与深色大图一致的 `THANKS` 迷你版（三行文案收在瓦片内，不再只手写「THANK」）；THANK 页的进出**与其他页使用同一套 640ms 上/下滑动**，但旧页不再做 `scale(.98)` 缩小（1% 缝隙会在深色 THANK 上露出白色接缝），并且「其他项目」面板只在 THANK 出现、等翻页动画结束（约 700ms）后再展开/收起，避免作品框在动画中被缩放造成白边与抖动。细节见 §3.6 / §3.12。
 
 ### 6.7 文档治理
 
 - **2026-11-12**：将原按日期累积的变更流水合并为上述主题基线。原因是历史条目包含大量重复验证、阶段性试改和已撤回方案，容易与当前规范冲突；此后设计参数更新到 §3，遗留状态更新到 §5，§6 只记录通用、全局且长期有效的决策。
+
+### 6.8 埋点与数据看板基线
+
+- **2026-11-16**：新增完整埋点与看板体系，站点本身仍是纯静态、零依赖：`analytics.js` 采集器 + `analytics/`（共享聚合 `summary.js`、本地 collector、Cloudflare Worker + D1、自包含看板、示例数据与回归工具、部署文档、体验分析报告）。触发点覆盖首页曝光/封面曝光/作品点击、查看器打开/逐页/退出、关于我打开/折叠、简历下载、联系方式点击、全屏/视频/热区链接，并采集 Web Vitals、首屏资源体积与 JS/资源错误。选择自建 Worker + D1 而不是第三方原因：国内可访问（支持自定义域名）、原始事件自己掌控、能算逐页到达/漏斗、无 Cookie 与第三方脚本。**当前 endpoint 未配置，线上暂不上报**；部署步骤见 `analytics/README.md §4`，使用说明与数据契约见同文，体验结论与优化优先级见 `analytics/体验分析报告.md`。
+- **2026-11-16**：验收范围——本地 collector 端到端（Chrome 驱动真实交互：首页曝光→点击→键盘/缩略图翻页→关于我→下载→返回，事件全部落库）、8 个基准视口无 JS 报错/横向溢出/卡片裁切、analytics.js 被拦截时站点正常、DNT 关闭采集、`file://` 双击打开站点与看板正常、Worker 路由与鉴权用 mock D1 验证、聚合不变量 26 项通过。实测首屏：桌面 2.9 MB（图片 2.6 MB）、移动 2.1 MB（图片 1.8 MB），作为后续封面响应式优化的基线。
+- 维护约定：新增/修改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序改，并提升 `script.js`/`analytics.js` 的 `?v=`；新增作品同步 `summary.js` 的 `PROJECTS`；看板令牌、D1 备份/删除/保留策略见 `analytics/README.md §7`。
