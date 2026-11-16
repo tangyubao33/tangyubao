@@ -27,6 +27,11 @@ const kingsoftSlides = kingsoftPages.map((number, index) => ({
    placement editor (.qa/media/compose.html).
 --------------------------------------------------------------------------- */
 const isComposite = (slide) => Boolean(slide && slide.type === "composite");
+// Closing page added to every project: it is a DOM-rendered page (no bitmap),
+// so it must be excluded from image preloading, placeholders and resolution
+// swapping, and it does not count towards the "N PAGES" shown on the cards.
+const isThank = (slide) => Boolean(slide && slide.type === "thank");
+const contentPageCount = (project) => (project?.slides || []).filter((slide) => !isThank(slide)).length;
 const slideSource = (slide) => (isComposite(slide) ? (slide.src || slide.background) : slide?.src);
 // High-res originals stay untouched; the viewer loads the smallest WebP that
 // still covers the frame at the current device pixel ratio. The original is
@@ -98,6 +103,7 @@ function refreshArtworkResolution() {
   if (elements.artwork.classList.contains("is-loading")) return;
   const project = currentProject();
   const slide = project?.slides?.[state.slideIndex];
+  if (isThank(slide)) return;
   const visual = activeVisualSlide(slide);
   if (!slide || !visual || !visual.variants?.length) return;
   const wanted = pickSlideSource(visual);
@@ -452,6 +458,20 @@ Object.values(experiences).forEach((experience) => {
   });
 });
 
+// Every project closes with the same THANK page (rendered by the DOM, not a
+// bitmap): the contact details are live mailto:/tel: links and stay crisp at
+// any size. It is appended after the cover setup above so it always lands last.
+const THANK_SLIDE = {
+  type: "thank",
+  alt: "感谢观看 · 唐尉保的联系方式"
+};
+Object.values(experiences).forEach((experience) => {
+  experience.projects.forEach((project) => {
+    if (!project.slides?.length) return;
+    project.slides.push({ ...THANK_SLIDE });
+  });
+});
+
 const state = {
   screen: "home",
   experienceId: null,
@@ -475,6 +495,7 @@ const elements = {
   totalCount: document.querySelector("[data-total-count]"),
   artwork: document.querySelector("[data-main-artwork]"),
   artworkGhost: document.querySelector("[data-artwork-ghost]"),
+  thankSlide: document.querySelector("[data-thank-slide]"),
   artworkLinks: document.querySelector("[data-artwork-links]"),
   slideCanvas: document.querySelector("[data-slide-canvas]"),
   loader: document.querySelector("[data-image-loader]"),
@@ -724,7 +745,9 @@ function sizeArtworkFrame() {
   frame.style.width = `${Math.round(width)}px`;
   frame.style.height = `${Math.round(height)}px`;
   // 1% of the frame width: media-box radii/shadows are stored as percentages
-  // so they scale with the page instead of looking oversized on small screens
+  // so they scale with the page instead of looking oversized on small screens;
+  // the THANK page also sizes its type from this unit so it fits any frame.
+  frame.style.setProperty("--frame-unit", `${width / 100}px`);
   if (elements.slideCanvas) elements.slideCanvas.style.setProperty("--frame-unit", `${width / 100}px`);
   // the "other projects" panel overlays the stage bottom: nudge the whole
   // stack (artwork + fullscreen button) up so it ends above the panel
@@ -891,7 +914,7 @@ function renderTimeline() {
             <span class="stream-project-top"><i>${pad(projectIndex + 1)}</i><em>${project.type}</em></span>
             <span class="stream-project-info">
               <b>${project.name}</b>
-              <small>${project.disabled ? "项目资料整理中" : `${project.slides.length} PAGES · EXPLORE`}</small>
+              <small>${project.disabled ? "项目资料整理中" : `${contentPageCount(project)} PAGES · EXPLORE`}</small>
             </span>
           </button>
         `).join("")}
@@ -922,7 +945,7 @@ function renderProjects() {
       <span class="project-card-content">
         <span>${project.type}</span>
         <h3>${project.name}</h3>
-        <p>${project.description}${project.slides ? ` · ${project.slides.length} PAGES` : ""}</p>
+        <p>${project.description}${project.slides ? ` · ${contentPageCount(project)} PAGES` : ""}</p>
       </span>
     </button>
   `).join("");
@@ -996,9 +1019,13 @@ function renderViewer() {
   elements.thumbnailRail.innerHTML = project.slides.map((slide, index) => {
     const videoCount = slideVideoCount(slide);
     const badge = videoCount ? `<i class="thumbnail-play" aria-hidden="true">▶${videoCount > 1 ? videoCount : ""}</i>` : "";
+    const label = isThank(slide) ? "查看感谢页" : `查看第 ${index + 1} 页${videoCount ? "（含视频）" : ""}`;
+    const visual = isThank(slide)
+      ? `<span class="thumbnail-thank" aria-hidden="true">THANK</span>`
+      : `<img src="${slideThumb(slide)}" alt="" loading="lazy">`;
     return `
-    <button class="thumbnail${index === state.slideIndex ? " is-current" : ""}" type="button" data-slide-index="${index}" role="option" aria-selected="${index === state.slideIndex}" tabindex="${index === state.slideIndex ? 0 : -1}" aria-label="查看第 ${index + 1} 页${videoCount ? "（含视频）" : ""}">
-      <img src="${slideThumb(slide)}" alt="" loading="lazy">
+    <button class="thumbnail${index === state.slideIndex ? " is-current" : ""}" type="button" data-slide-index="${index}" role="option" aria-selected="${index === state.slideIndex}" tabindex="${index === state.slideIndex ? 0 : -1}" aria-label="${label}">
+      ${visual}
       ${badge}
       <b>${pad(index + 1)}</b>
     </button>`;
@@ -1068,6 +1095,49 @@ function markArtworkReady() {
   window.setTimeout(refreshArtworkResolution, 60);
 }
 
+/* Closing THANK page: a DOM page instead of a bitmap. The main <img> has to be
+   emptied (no src, no stale load handlers) so the frame shows only the closing
+   content; the ghost layer still carries the outgoing bitmap when turning into
+   it, so the usual 640ms slide keeps working. */
+let thankHideTimer = 0;
+
+function hideThankSlide() {
+  window.clearTimeout(thankHideTimer);
+  const thank = elements.thankSlide;
+  if (!thank) return;
+  thank.hidden = true;
+  thank.style.transition = "none";
+  thank.style.transform = "";
+  thank.style.opacity = "";
+  thank.style.zIndex = "";
+}
+
+function showThankSlide() {
+  window.clearTimeout(thankHideTimer);
+  const thank = elements.thankSlide;
+  if (!thank) return;
+  clearArtworkLoading();
+  window.clearTimeout(slideAnimTimer);
+  slideAnimToken += 1;
+  elements.artwork.onload = null;
+  elements.artwork.onerror = null;
+  elements.artwork.classList.remove("is-loading");
+  elements.artwork.removeAttribute("src");
+  elements.artwork.alt = "";
+  elements.artwork.style.transition = "none";
+  elements.artwork.style.transform = "";
+  elements.artwork.style.opacity = "";
+  if (elements.artworkLinks) elements.artworkLinks.textContent = "";
+  resetMediaBoxes();
+  thank.hidden = false;
+  thank.style.transition = "none";
+  thank.style.transform = "";
+  thank.style.opacity = "";
+  void thank.offsetWidth;
+  thank.style.transition = "";
+  markArtworkReady();
+}
+
 function setArtworkPlaceholder(slide) {
   // Stack pages use the last layer as their rail thumb; the backdrop must
   // still match the layer actually on screen (the base layer on entry).
@@ -1080,7 +1150,12 @@ function setArtworkPlaceholder(slide) {
   elements.artworkFrame.style.backgroundPosition = "center";
 }
 
-function placeArtwork(slide) {
+function placeArtwork(slide, options = {}) {
+  if (isThank(slide)) {
+    showThankSlide();
+    return;
+  }
+  if (!options.keepThank) hideThankSlide();
   elements.artwork.classList.add("is-loading");
   showArtworkLoading();
   setArtworkPlaceholder(slide);
@@ -1595,6 +1670,7 @@ function renderOverlays(slide) {
 function resetArtworkLayers() {
   window.clearTimeout(slideAnimTimer);
   clearArtworkLoading();
+  hideThankSlide();
   if (elements.artworkLinks) elements.artworkLinks.textContent = "";
   slideAnimToken += 1;
   const ghost = elements.artworkGhost;
@@ -1621,6 +1697,60 @@ function moveArtwork(slide, direction) {
   if (!ghost || slideMotionQuery.matches) {
     resetArtworkLayers();
     placeArtwork(slide);
+    return;
+  }
+  // Leaving the closing THANK page: there is no bitmap to slide out, so the
+  // closing page dissolves over the incoming page instead of sliding.
+  const thank = elements.thankSlide;
+  if (thank && !thank.hidden && !isThank(slide)) {
+    window.clearTimeout(slideAnimTimer);
+    slideAnimToken += 1;
+    clearArtworkLoading();
+    resetMediaBoxes();
+    thank.style.zIndex = "3";
+    thank.style.transition = "opacity .22s ease";
+    thank.style.opacity = "0";
+    window.clearTimeout(thankHideTimer);
+    thankHideTimer = window.setTimeout(hideThankSlide, 240);
+    placeArtwork(slide, { keepThank: true });
+    return;
+  }
+  // Turning into the closing THANK page: the outgoing bitmap slides away on the
+  // ghost layer while the DOM page slides in, matching every other page turn.
+  if (isThank(slide)) {
+    const previousSrc = elements.artwork.currentSrc || elements.artwork.src || "";
+    resetArtworkLayers();
+    resetMediaBoxes();
+    showThankSlide();
+    if (!previousSrc) return;
+    const token = slideAnimToken;
+    const layer = elements.thankSlide;
+    ghost.src = previousSrc;
+    ghost.alt = "";
+    ghost.style.visibility = "visible";
+    ghost.style.transform = "translateY(0)";
+    ghost.style.transition = "none";
+    layer.style.transition = "none";
+    layer.style.transform = `translateY(${direction > 0 ? 100 : -100}%) scale(1.02)`;
+    void ghost.offsetWidth;
+    const easing = "cubic-bezier(.76, 0, .24, 1)";
+    const duration = 640;
+    ghost.style.transition = `transform ${duration}ms ${easing}`;
+    layer.style.transition = `transform ${duration}ms ${easing}`;
+    window.requestAnimationFrame(() => {
+      if (token !== slideAnimToken) return;
+      ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%) scale(.98)`;
+      layer.style.transform = "translateY(0) scale(1)";
+    });
+    slideAnimTimer = window.setTimeout(() => {
+      if (token !== slideAnimToken) return;
+      ghost.style.visibility = "hidden";
+      ghost.style.transition = "none";
+      ghost.style.transform = "";
+      layer.style.transition = "";
+      layer.style.transform = "";
+      markArtworkReady();
+    }, duration + 40);
     return;
   }
   const previousSrc = elements.artwork.currentSrc || elements.artwork.src;
@@ -1850,6 +1980,7 @@ function setActiveScreen(screenName) {
     clearFullscreenMorph();
     resetMediaBoxes();
     clearArtworkLoading();
+    hideThankSlide();
   }
   if (screenName !== "viewer" && isViewerFullscreen()) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
