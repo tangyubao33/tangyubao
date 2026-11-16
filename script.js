@@ -284,9 +284,20 @@ function setCardExpandedCover(card, expanded) {
   const metrics = cardCoverMetrics(card);
   if (!layer || !metrics || !metrics.cover) return;
   if (!expanded) {
-    card.classList.remove("is-cover-expanded");
+    window.clearTimeout(card._coverCollapseTimer);
+    // Keep the 16:9 layer on top while the card shrinks back: at the resting
+    // size its centred crop is identical to the portrait variant, so the cover
+    // visibly scales with the card instead of "switching" to a zoomed crop.
+    if (card.classList.contains("is-cover-expanded")) {
+      card.classList.add("is-cover-collapsing");
+      card._coverCollapseTimer = window.setTimeout(() => {
+        card.classList.remove("is-cover-collapsing", "is-cover-expanded");
+      }, 1050);
+    }
     return;
   }
+  window.clearTimeout(card._coverCollapseTimer);
+  card.classList.remove("is-cover-collapsing");
   const sizes = `${Math.ceil(Math.max(metrics.width, metrics.height * COVER_ASPECT))}px`;
   if (layer.dataset.cover !== metrics.cover) {
     layer.dataset.cover = metrics.cover;
