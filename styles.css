@@ -791,7 +791,8 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   .header-contact a { gap: 5px; font-size: 9px; letter-spacing: .03em; }
   .header-contact span { font-size: 8px; letter-spacing: .08em; }
 
-  .home-heading { --home-type: clamp(14.8px, 4.6vw, 21px); height: 25%; min-height: 138px; }
+  /* 标题 : 简历/个人信息 = 1 : 0.6（最小宽度也保持这个比例） */
+  .home-heading { --home-type: clamp(16.7px, 4.6vw, 21px); height: 25%; min-height: 138px; }
   .home-heading { padding-left: 20px; padding-right: 20px; }
   .home-heading h1 { --title-size: var(--home-type); font-size: var(--home-type); white-space: nowrap; }
   .home-heading-main { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
@@ -802,10 +803,10 @@ body[data-screen="viewer"] .viewer-nav { animation: viewer-nav-in .62s var(--eas
   .profile-top { justify-content: flex-start; }
   .profile-avatar { order: -1; }
   .profile-info { justify-items: start; }
-  .profile-name { justify-content: flex-start; font-size: clamp(11px, calc(var(--home-type) * .72), 15px); }
-  .profile-name em { font-size: clamp(11px, calc(var(--home-type) * .72), 15px); }
-  .profile-role { text-align: left; font-size: clamp(10px, calc(var(--home-type) * .6), 13px); }
-  .portfolio-cn { text-align: left; font-size: clamp(11px, calc(var(--home-type) * .72), 15px); }
+  .profile-name { justify-content: flex-start; font-size: calc(var(--home-type) * .6); }
+  .profile-name em { font-size: calc(var(--home-type) * .6); }
+  .profile-role { text-align: left; font-size: calc(var(--home-type) * .6); }
+  .portfolio-cn { text-align: left; font-size: calc(var(--home-type) * .6); }
   .home-heading .portfolio-title { gap: 3px; line-height: 1; }
   .portfolio-years { font-size: clamp(12px, 4.1vw, 16px); text-shadow: none; }
   .profile { right: 20px; bottom: 6px; gap: 7px; }
