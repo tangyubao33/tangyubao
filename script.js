@@ -133,6 +133,20 @@ kingsoftSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); }
    next couple of pages without holding the whole project in memory. */
 const warmedImages = new Map();
 const WARM_IMAGE_LIMIT = 4;
+/* Neighbours are warmed only after the page the visitor is looking at has
+   decoded, so a slow link spends its bandwidth on the visible artwork first.
+   Turns get a ~640ms head start while the slide animation runs. */
+function warmViewerNeighbors() {
+  if (state.screen !== "viewer") return;
+  const project = currentProject();
+  if (!project?.slides?.length) return;
+  const index = state.slideIndex;
+  [1, 2, -1].forEach((offset) => {
+    const preloadIndex = index + offset;
+    if (preloadIndex < 0 || preloadIndex >= project.slides.length) return;
+    warmSlideImage(project.slides[preloadIndex]);
+  });
+}
 function warmSlideImage(slide) {
   if (isStack(slide)) {
     (slide.layers || []).forEach((layer) => warmSlideImage(layer));
@@ -1550,6 +1564,7 @@ function markArtworkReady() {
   elements.artworkFrame.style.backgroundImage = "";
   sizeArtworkFrame();
   finishArtworkLoad(true);
+  warmViewerNeighbors();
   window.setTimeout(refreshArtworkResolution, 60);
 }
 
@@ -2154,6 +2169,7 @@ function moveArtwork(slide, direction) {
     // slide; otherwise the incoming layer can be blank for a frame.
     whenImageDecoded(elements.artwork, () => {
       if (token !== slideAnimToken) return;
+      warmViewerNeighbors();
       void elements.artwork.offsetWidth;
       const easing = "cubic-bezier(.76, 0, .24, 1)";
       const duration = 640;
@@ -2351,14 +2367,6 @@ function showSlide(index, scrollThumbnail = true, via = "programmatic") {
   if (document.activeElement?.closest(".thumbnail-rail") && activeThumbnail) activeThumbnail.focus({ preventScroll: true });
 
   warmSlideImage(project.slides[state.slideIndex]);
-  // Two pages ahead means a normal scroll (which can arrive before the previous
-  // preload finished on a slow link) still finds the page decoded. No wrap-around:
-  // warming the last page from page 1 would just waste a request.
-  [1, 2, -1].forEach((offset) => {
-    const preloadIndex = state.slideIndex + offset;
-    if (preloadIndex < 0 || preloadIndex >= project.slides.length) return;
-    warmSlideImage(project.slides[preloadIndex]);
-  });
 }
 
 const screenHeadings = {
