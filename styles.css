@@ -578,8 +578,19 @@ body.is-about-open { overflow: hidden; }
 .thumbnail img { width: 100%; height: 100%; object-fit: cover; }
 .thumbnail b { position: absolute; right: 5px; bottom: 4px; display: grid; place-items: center; min-width: 19px; height: 17px; padding: 0 4px; border-radius: 4px; color: #fff; background: rgba(0, 0, 0, .55); font-size: 8px; font-weight: 550; }
 /* Closing page tile: no bitmap, just the handwritten THANK word. */
-.thumbnail-thank { display: grid; place-items: center; width: 100%; height: 100%; color: #f5c84b; background: linear-gradient(158deg, #1a222c 0%, #0e1319 58%, #090d12 100%); font-family: "Caveat", "Kalam", cursive; font-size: 15px; font-weight: 600; line-height: 1; letter-spacing: .01em; }
-@media (max-width: 760px) { .thumbnail-thank { font-size: 12px; } }
+/* Miniature of the closing THANKS page: same dark ground, same centred stack
+   (big THANKS, then name/role, then the TEL ｜ E-MAIL line) so the rail tile and
+   the full page read as one design. */
+.thumbnail-thank { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; width: 100%; height: 100%; padding: 3px 2px 15px; color: #f2f4f7; background: radial-gradient(125% 135% at 16% 8%, #1b222c 0%, #10151c 48%, #0a0e13 100%); }
+.thumbnail-thank i { font-style: normal; white-space: nowrap; }
+.thumbnail-thank-word { color: #f2f4f7; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 15px; font-weight: 600; line-height: .95; letter-spacing: .02em; }
+.thumbnail-thank-name { color: #b4b8be; font-size: 4.4px; font-weight: 500; letter-spacing: .1em; }
+.thumbnail-thank-contact { color: #8a929e; font-size: 3.4px; letter-spacing: .01em; }
+@media (max-width: 760px) {
+  .thumbnail-thank-word { font-size: 13px; }
+  .thumbnail-thank-name { font-size: 4px; }
+  .thumbnail-thank-contact { font-size: 3px; }
+}
 
 /* Editorial interaction layer — inspired by motion-led portfolio systems. */
 :root { --pointer-shift: 0px; --header-h: 70px; }

@@ -1012,6 +1012,7 @@ function renderViewer() {
   elements.viewerTitle.textContent = project.name;
   elements.totalCount.textContent = pad(project.slides.length);
   elements.fullscreenTotal.textContent = pad(project.slides.length);
+  window.clearTimeout(lastSlideTimer);
   elements.viewerScreen.classList.remove("is-last-slide", "is-panel-adjusting");
   window.clearTimeout(panelAdjustTimer);
   elements.viewerScreen.style.setProperty("--stack-shift", "0px");
@@ -1021,7 +1022,11 @@ function renderViewer() {
     const badge = videoCount ? `<i class="thumbnail-play" aria-hidden="true">▶${videoCount > 1 ? videoCount : ""}</i>` : "";
     const label = isThank(slide) ? "查看感谢页" : `查看第 ${index + 1} 页${videoCount ? "（含视频）" : ""}`;
     const visual = isThank(slide)
-      ? `<span class="thumbnail-thank" aria-hidden="true">THANK</span>`
+      ? `<span class="thumbnail-thank" aria-hidden="true">
+          <i class="thumbnail-thank-word">THANKS</i>
+          <i class="thumbnail-thank-name">唐尉保 · UI/UX DESIGNER</i>
+          <i class="thumbnail-thank-contact">TEL：189113300923 ｜ E-MAIL：834316142@qq.com</i>
+        </span>`
       : `<img src="${slideThumb(slide)}" alt="" loading="lazy">`;
     return `
     <button class="thumbnail${index === state.slideIndex ? " is-current" : ""}" type="button" data-slide-index="${index}" role="option" aria-selected="${index === state.slideIndex}" tabindex="${index === state.slideIndex ? 0 : -1}" aria-label="${label}">
@@ -1708,15 +1713,17 @@ function moveArtwork(slide, direction) {
     clearArtworkLoading();
     resetMediaBoxes();
     thank.style.zIndex = "3";
-    thank.style.transition = "opacity .22s ease";
+    thank.style.transition = "opacity .3s ease";
     thank.style.opacity = "0";
     window.clearTimeout(thankHideTimer);
-    thankHideTimer = window.setTimeout(hideThankSlide, 240);
+    thankHideTimer = window.setTimeout(hideThankSlide, 320);
     placeArtwork(slide, { keepThank: true });
     return;
   }
-  // Turning into the closing THANK page: the outgoing bitmap slides away on the
-  // ghost layer while the DOM page slides in, matching every other page turn.
+  // Turning into the closing THANK page: cross-fade instead of a slide. The
+  // outgoing bitmap keeps its size (the frame does not resize on this turn)
+  // and dissolves out over the dark closing page, so no white page edge slides
+  // across and nothing jitters.
   if (isThank(slide)) {
     const previousSrc = elements.artwork.currentSrc || elements.artwork.src || "";
     resetArtworkLayers();
@@ -1724,31 +1731,24 @@ function moveArtwork(slide, direction) {
     showThankSlide();
     if (!previousSrc) return;
     const token = slideAnimToken;
-    const layer = elements.thankSlide;
     ghost.src = previousSrc;
     ghost.alt = "";
     ghost.style.visibility = "visible";
-    ghost.style.transform = "translateY(0)";
+    ghost.style.transform = "";
+    ghost.style.opacity = "1";
     ghost.style.transition = "none";
-    layer.style.transition = "none";
-    layer.style.transform = `translateY(${direction > 0 ? 100 : -100}%) scale(1.02)`;
     void ghost.offsetWidth;
-    const easing = "cubic-bezier(.76, 0, .24, 1)";
-    const duration = 640;
-    ghost.style.transition = `transform ${duration}ms ${easing}`;
-    layer.style.transition = `transform ${duration}ms ${easing}`;
+    const duration = 340;
+    ghost.style.transition = `opacity ${duration}ms ease`;
     window.requestAnimationFrame(() => {
       if (token !== slideAnimToken) return;
-      ghost.style.transform = `translateY(${direction > 0 ? -100 : 100}%) scale(.98)`;
-      layer.style.transform = "translateY(0) scale(1)";
+      ghost.style.opacity = "0";
     });
     slideAnimTimer = window.setTimeout(() => {
       if (token !== slideAnimToken) return;
       ghost.style.visibility = "hidden";
       ghost.style.transition = "none";
-      ghost.style.transform = "";
-      layer.style.transition = "";
-      layer.style.transform = "";
+      ghost.style.opacity = "";
       markArtworkReady();
     }, duration + 40);
     return;
@@ -1916,6 +1916,29 @@ function navigateViewer(direction) {
   showSlide(state.slideIndex + direction);
 }
 
+let lastSlideTimer = 0;
+
+/* The bottom "other projects" panel changes the artwork frame size. Doing that
+   while a page is sliding makes the outgoing/incoming bitmap resize mid-motion
+   (Safari paints white slivers at the frame edges). When a page turn changes
+   the panel state, wait until the slide has finished, then open/close it. */
+function scheduleLastSlide(wantsLast, direction) {
+  window.clearTimeout(lastSlideTimer);
+  const current = elements.viewerScreen.classList.contains("is-last-slide");
+  if (direction === 0 || current === wantsLast) {
+    setLastSlide(wantsLast);
+    return;
+  }
+  const targetIndex = state.slideIndex;
+  lastSlideTimer = window.setTimeout(() => {
+    const projectNow = currentProject();
+    if (!projectNow || state.screen !== "viewer" || state.slideIndex !== targetIndex) return;
+    const lastIdx = projectNow.slides.length - 1;
+    const fromIdx = isThank(projectNow.slides[lastIdx]) ? lastIdx - 1 : lastIdx;
+    setLastSlide(state.slideIndex >= fromIdx);
+  }, 700);
+}
+
 function showSlide(index, scrollThumbnail = true) {
   const project = currentProject();
   if (!project?.slides?.length) return;
@@ -1931,8 +1954,14 @@ function showSlide(index, scrollThumbnail = true) {
   }
   elements.currentCount.textContent = pad(state.slideIndex + 1);
   elements.fullscreenCurrent.textContent = pad(state.slideIndex + 1);
-  const isLastSlide = state.slideIndex === project.slides.length - 1;
-  setLastSlide(isLastSlide);
+  // The final THANK page is not a bitmap, so the "other projects" panel opens
+  // one page earlier and stays open across the last content page -> THANK turn.
+  // That keeps the artwork frame at one size during the cross-fade, otherwise
+  // the frame resize and the page transition fight each other (white slivers +
+  // jitter while the outgoing page shrinks).
+  const lastIndex = project.slides.length - 1;
+  const panelFromIndex = isThank(project.slides[lastIndex]) ? lastIndex - 1 : lastIndex;
+  scheduleLastSlide(state.slideIndex >= panelFromIndex, direction);
 
   if (direction === 0) {
     resetArtworkLayers();
@@ -1982,6 +2011,7 @@ function setActiveScreen(screenName) {
     clearArtworkLoading();
     hideThankSlide();
   }
+  if (screenName !== "viewer") window.clearTimeout(lastSlideTimer);
   if (screenName !== "viewer" && isViewerFullscreen()) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     elements.viewerScreen.classList.remove("is-pseudo-fullscreen");
