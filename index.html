@@ -8,7 +8,7 @@
   <title>唐尉保 · 产品设计作品集</title>
   <link rel="icon" href="唐尉保作品集2_files/favicon.ico">
   <style>html.is-booting [data-screen] { visibility: hidden; } html.is-booting body { background: #111214; }</style>
-  <link rel="stylesheet" href="styles.css?v=20261116a">
+  <link rel="stylesheet" href="styles.css?v=20261116b">
   <noscript><style>html.is-booting [data-screen] { visibility: visible; }</style></noscript>
 </head>
 <body>
@@ -44,6 +44,10 @@
     <div class="contact-card" data-contact-card role="dialog" aria-modal="true" aria-labelledby="about-title">
       <button class="contact-card-close" type="button" data-contact-close aria-label="关闭关于我">×</button>
       <aside class="about-side">
+        <div class="about-side-head">
+          <p class="about-kicker">About</p>
+          <h2 class="about-title" id="about-title">关于我</h2>
+        </div>
         <img class="contact-card-avatar" src="assets/profile.webp" alt="唐尉保头像" width="192" height="192">
         <p class="contact-card-name">唐尉保</p>
         <p class="contact-card-role">UI/UX DESIGNER</p>
@@ -57,12 +61,14 @@
           <a href="tel:+8618911300923"><span>TEL / 微信</span><b>18911300923</b></a>
           <a href="mailto:834316142@qq.com"><span>E-MAIL</span><b>834316142@qq.com</b></a>
         </div>
+        <a class="about-download" href="assets/resume/tangyubao-resume-2026.pdf" download="唐尉保-UI设计师-个人简历2026.pdf" aria-label="下载 PDF 简历，735 KB">
+          <span class="about-download-icon" aria-hidden="true">↓</span>
+          <b>下载 PDF 简历</b>
+          <em>735 KB</em>
+        </a>
       </aside>
 
       <div class="about-main">
-        <p class="about-kicker">About</p>
-        <h2 class="about-title" id="about-title">关于我</h2>
-
         <section class="about-section">
           <p class="about-label">自我介绍</p>
           <p class="about-lead">具备 10 年 UI/UX 与设计经验，擅长在复杂业务场景中把用户需求、业务目标与数据反馈转化为清晰可落地的体验方案。兼具产品设计、设计系统建设、项目推进与小组管理能力，能够从策略制定、方案落地到上线复盘，持续提升产品体验与团队交付效率，兼顾设计执行与项目管理能力的平衡。</p>
@@ -91,13 +97,19 @@
               <h3>京东零售 / 技术与数据中心 / JTD</h3>
             </div>
             <p class="about-job-line">TO B 端数据产品体验设计：京东数坊营销数据平台、黄金眼数据平台</p>
-            <p class="about-duty-label">主要职责</p>
-            <ol class="about-duties">
-              <li><b>01</b><span>负责 B 端中台营销数据产品的 UI/UX 设计工作，并把控整体设计质量</span></li>
-              <li><b>02</b><span>协同产品深入业务，为业务提供产品体验的整体设计方案，并梳理产品逻辑，推动设计进程，保障产出质量还原设计成果，持续跟踪体验数据变化，及时发现问题做出优化调整</span></li>
-              <li><b>03</b><span>沉淀设计经验和方法，协同小伙伴共同制定体验设计规范与设计体系建设</span></li>
-              <li><b>04</b><span>完善设计工具的打磨，完成符合数据产品特性的设计资产沉淀</span></li>
-            </ol>
+            <div class="about-duties-wrap" data-duties>
+              <button class="about-duties-toggle" type="button" data-duties-toggle aria-expanded="false" aria-controls="jd-duties">
+                <span>主要职责</span><em>4 项</em><i aria-hidden="true"></i>
+              </button>
+              <div class="about-duties-panel" id="jd-duties">
+                <ol class="about-duties" inert aria-hidden="true">
+                  <li><b>01</b><span>负责 B 端中台营销数据产品的 UI/UX 设计工作，并把控整体设计质量</span></li>
+                  <li><b>02</b><span>协同产品深入业务，为业务提供产品体验的整体设计方案，并梳理产品逻辑，推动设计进程，保障产出质量还原设计成果，持续跟踪体验数据变化，及时发现问题做出优化调整</span></li>
+                  <li><b>03</b><span>沉淀设计经验和方法，协同小伙伴共同制定体验设计规范与设计体系建设</span></li>
+                  <li><b>04</b><span>完善设计工具的打磨，完成符合数据产品特性的设计资产沉淀</span></li>
+                </ol>
+              </div>
+            </div>
           </article>
 
           <article class="about-job">
@@ -107,13 +119,19 @@
               <h3>抖音 / UED / 增长中心-平台</h3>
             </div>
             <p class="about-job-line">TOB&amp;C端平台产品体验设计：抖音创作服务平台、抖音分成平台、抖音精选</p>
-            <p class="about-duty-label">主要职责</p>
-            <ol class="about-duties">
+            <div class="about-duties-wrap is-open" data-duties>
+              <button class="about-duties-toggle" type="button" data-duties-toggle aria-expanded="true" aria-controls="douyin-duties">
+                <span>主要职责</span><em>4 项</em><i aria-hidden="true"></i>
+              </button>
+              <div class="about-duties-panel" id="douyin-duties">
+                <ol class="about-duties">
               <li><b>01</b><span>负责重点项目的需求拆解：负责多个抖音创作服务平台 S 级需求提案，跨团队协同与上线复盘，通过用户反馈、体验指标和业务数据持续优化产品体验。</span></li>
               <li><b>02</b><span>主导 AI 创作能力的产品体验设计：包括 AI 封面、创作辅助、诊断与引导式任务流程，推动模型能力转化为用户可理解、可使用的创作工具。</span></li>
               <li><b>03</b><span>建设和维护平台设计系统：包括视觉语言、组件规范、图表规范、交互模式及体验问题池，提升多业务协作下的一致性与交付效率。并注重 AI 在实际工作流程中的应用，有效提升产设研协作效率。</span></li>
-              <li><b>04</b><span>负责创作小组与项目管理：包括任务分配、设计评审、质量把控、成员辅导及协作流程优化。发起抖音创作服务平台体验升级，综合评估业务目标、用户体验、成本难度，合理制定目标，协同多个业务线、职能，共同合作顺利完成项目目标。</span></li>
-            </ol>
+                  <li><b>04</b><span>负责创作小组与项目管理：包括任务分配、设计评审、质量把控、成员辅导及协作流程优化。发起抖音创作服务平台体验升级，综合评估业务目标、用户体验、成本难度，合理制定目标，协同多个业务线、职能，共同合作顺利完成项目目标。</span></li>
+                </ol>
+              </div>
+            </div>
           </article>
         </section>
       </div>
@@ -221,6 +239,6 @@
 
 
   <noscript>请启用 JavaScript 以浏览交互式作品集。</noscript>
-  <script src="script.js?v=20261116a" defer></script>
+  <script src="script.js?v=20261116b" defer></script>
 </body>
 </html>

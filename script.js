@@ -787,6 +787,22 @@ contactCard.addEventListener("click", (event) => {
   if (event.target.closest("[data-contact-close]")) setContactCard(false, true);
 });
 
+// 主要职责 can be folded away: the JD entry starts collapsed, Douyin starts open
+contactCard.addEventListener("click", (event) => {
+  const toggle = event.target.closest?.("[data-duties-toggle]");
+  if (!toggle) return;
+  const wrap = toggle.closest("[data-duties]");
+  if (!wrap) return;
+  const open = !wrap.classList.contains("is-open");
+  wrap.classList.toggle("is-open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+  const list = wrap.querySelector(".about-duties");
+  if (list) {
+    list.toggleAttribute("inert", !open);
+    list.setAttribute("aria-hidden", String(!open));
+  }
+});
+
 contactCard.addEventListener("keydown", (event) => {
   if (event.key !== "Tab") return;
   const focusable = contactFocusable();
