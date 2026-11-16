@@ -109,18 +109,34 @@ const pickSlideSource = (slide) => {
 jdSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); });
 kingsoftSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); });
 
-const warmedImageSources = new Set();
+/* Keep the next few pages decoded before they are needed. Merely warming the
+   URL still leaves the browser to decode a ~2560px WebP on the turn itself,
+   which makes the loading veil flash on slower machines; decoding ahead moves
+   that cost off the turn. The small LRU keeps decoded bitmaps alive for the
+   next couple of pages without holding the whole project in memory. */
+const warmedImages = new Map();
+const WARM_IMAGE_LIMIT = 4;
 function warmSlideImage(slide) {
   if (isStack(slide)) {
     (slide.layers || []).forEach((layer) => warmSlideImage(layer));
     return;
   }
   const src = pickSlideSource(slide);
-  if (!src || warmedImageSources.has(src)) return;
-  warmedImageSources.add(src);
+  if (!src) return;
+  const cached = warmedImages.get(src);
+  if (cached) {
+    warmedImages.delete(src);
+    warmedImages.set(src, cached);
+    return;
+  }
   const image = new Image();
   image.decoding = "async";
   image.src = src;
+  if (typeof image.decode === "function") image.decode().catch(() => {});
+  warmedImages.set(src, image);
+  while (warmedImages.size > WARM_IMAGE_LIMIT) {
+    warmedImages.delete(warmedImages.keys().next().value);
+  }
 }
 
 function whenImageDecoded(image, callback) {
@@ -2194,6 +2210,9 @@ function stepStack(direction, via = "wheel") {
 }
 
 function navigateViewer(direction, via = "wheel") {
+  // The click-to-turn gesture is a fullscreen-only reading aid; keep it out of
+  // the normal viewer even if a stray click bubbles from clipped content.
+  if (via === "click" && !isViewerFullscreen()) return;
   if (stepStack(direction, via)) return;
   showSlide(state.slideIndex + direction, true, via);
 }
@@ -2258,11 +2277,13 @@ function showSlide(index, scrollThumbnail = true, via = "programmatic") {
   if (scrollThumbnail && activeThumbnail) scheduleThumbnailReveal();
   if (document.activeElement?.closest(".thumbnail-rail") && activeThumbnail) activeThumbnail.focus({ preventScroll: true });
 
-  [-1, 1].forEach((offset) => {
+  warmSlideImage(project.slides[state.slideIndex]);
+  // Two pages ahead means a normal scroll (which can arrive before the previous
+  // preload finished on a slow link) still finds the page decoded.
+  [1, 2, -1].forEach((offset) => {
     const preloadIndex = (state.slideIndex + offset + project.slides.length) % project.slides.length;
     warmSlideImage(project.slides[preloadIndex]);
   });
-  warmSlideImage(project.slides[state.slideIndex]);
 }
 
 const screenHeadings = {
