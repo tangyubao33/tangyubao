@@ -726,21 +726,24 @@ document.addEventListener("fullscreenchange", () => {
   if (fullscreenMorph) window.requestAnimationFrame(() => window.requestAnimationFrame(finishFullscreenMorph));
 });
 
-// Fullscreen reading gesture: left click turns forward, right click turns back.
-// Links, buttons, native video controls and media boxes keep their own clicks.
-function fullscreenPageTarget(event) {
-  if (!isViewerFullscreen() || state.screen !== "viewer") return false;
-  return !event.target.closest?.("a, button, video, audio, .artwork-toolbar, .slide-canvas, .other-projects");
+// Reading gesture: left click on the artwork turns forward, right click (in
+// fullscreen, where the browser menu is suppressed) turns back. Links, buttons,
+// native video controls and media boxes keep their own clicks. In the normal
+// viewer only the big image area is a page-turn target, not the empty stage.
+function viewerPageTarget(event) {
+  if (state.screen !== "viewer") return false;
+  if (!event.target.closest?.("[data-artwork-frame]")) return false;
+  return !event.target.closest("a, button, video, audio, .artwork-toolbar, .slide-canvas, .other-projects");
 }
 
 elements.viewerScreen.addEventListener("click", (event) => {
-  if (fullscreenPageTarget(event)) navigateViewer(1, "click");
+  if (viewerPageTarget(event)) navigateViewer(1, "click");
 });
 
 elements.viewerScreen.addEventListener("contextmenu", (event) => {
   if (!isViewerFullscreen() || state.screen !== "viewer") return;
   event.preventDefault();
-  if (fullscreenPageTarget(event)) navigateViewer(-1, "click");
+  if (viewerPageTarget(event)) navigateViewer(-1, "click");
 });
 
 document.addEventListener("pointermove", wakeFullscreenUI, { passive: true });
@@ -1154,6 +1157,45 @@ function trackViewerSlide(slide, via) {
   analytics?.setContext?.({ viewer_project: session.projectId, viewer_page: state.slideIndex + 1, viewer_id: session.id });
 }
 
+/* 作品页图片加载耗时：从开始选图到解码完成（不含 640ms 翻页动画），
+   用于区分「首屏页加载」与「翻页加载」的性能问题。 */
+let artworkLoad = null;
+
+function beginArtworkLoad(slide, phase) {
+  if (!slide) { artworkLoad = null; return; }
+  const project = currentProject();
+  if (!project) { artworkLoad = null; return; }
+  const src = pickSlideSource(slide);
+  artworkLoad = {
+    startedAt: performance.now(),
+    project: project.id,
+    projectKey: `${state.experienceId}/${project.id}`,
+    page: state.slideIndex + 1,
+    type: slideTypeOf(slide),
+    phase: phase,
+    src: src
+  };
+}
+
+function finishArtworkLoad(ok) {
+  const load = artworkLoad;
+  if (!load) return;
+  artworkLoad = null;
+  const duration = Math.max(0, performance.now() - load.startedAt);
+  const match = /\.w(\d+)\.webp$/.exec(load.src || "");
+  track("artwork_load", {
+    project: load.project,
+    project_key: load.projectKey,
+    page: load.page,
+    type: load.type,
+    phase: load.phase,
+    duration_ms: Math.round(duration),
+    success: ok !== false,
+    variant_w: match ? Number(match[1]) : 0,
+    mode: currentViewportMode()
+  });
+}
+
 function trackCardClick(experience, project, mode) {
   if (!experience || !project) return;
   const key = `${experience.id}/${project.id}`;
@@ -1473,6 +1515,7 @@ function markArtworkReady() {
   hideArtworkLoading();
   elements.artworkFrame.style.backgroundImage = "";
   sizeArtworkFrame();
+  finishArtworkLoad(true);
   window.setTimeout(refreshArtworkResolution, 60);
 }
 
@@ -1489,12 +1532,16 @@ function setArtworkPlaceholder(slide) {
 }
 
 function placeArtwork(slide) {
+  beginArtworkLoad(slide, "initial");
   elements.artwork.classList.add("is-loading");
   showArtworkLoading();
   setArtworkPlaceholder(slide);
   const ready = () => whenImageDecoded(elements.artwork, markArtworkReady);
   elements.artwork.onload = ready;
-  elements.artwork.onerror = markArtworkReady;
+  elements.artwork.onerror = () => {
+    finishArtworkLoad(false);
+    markArtworkReady();
+  };
   elements.artwork.src = pickSlideSource(slide);
   elements.artwork.alt = slide.alt || "";
   renderSlideLinks(slide);
@@ -2057,9 +2104,11 @@ function moveArtwork(slide, direction) {
   elements.artwork.classList.remove("is-loading");
   showArtworkLoading();
 
+  beginArtworkLoad(slide, "turn");
   const incoming = new Image();
   const incomingSrc = pickSlideSource(slide);
   const start = () => {
+    finishArtworkLoad(true);
     if (token !== slideAnimToken) return;
     elements.artwork.onload = null;
     elements.artwork.onerror = null;
@@ -2102,7 +2151,10 @@ function moveArtwork(slide, direction) {
   if (incoming.complete && incoming.naturalWidth) startReady();
   else {
     incoming.onload = startReady;
-    incoming.onerror = start;
+    incoming.onerror = () => {
+      finishArtworkLoad(false);
+      start();
+    };
   }
 }
 
@@ -2210,32 +2262,19 @@ function stepStack(direction, via = "wheel") {
 }
 
 function navigateViewer(direction, via = "wheel") {
-  // The click-to-turn gesture is a fullscreen-only reading aid; keep it out of
-  // the normal viewer even if a stray click bubbles from clipped content.
-  if (via === "click" && !isViewerFullscreen()) return;
   if (stepStack(direction, via)) return;
   showSlide(state.slideIndex + direction, true, via);
 }
 
 let lastSlideTimer = 0;
 
-/* The bottom "other projects" panel changes the artwork frame size. Doing that
-   while a page is sliding makes the outgoing/incoming bitmap resize mid-motion
-   (Safari paints white slivers at the frame edges). When a page turn changes
-   the panel state, wait until the slide has finished, then open/close it. */
-function scheduleLastSlide(wantsLast, direction) {
+/* The bottom "other projects" panel changes the artwork frame size and lifts
+   the stack. Open/close it in the same frame as the page turn so the panel,
+   the frame resize and the slide are one continuous motion; deferring the
+   resize until after the slide read as a stutter on the closing page. */
+function scheduleLastSlide(wantsLast) {
   window.clearTimeout(lastSlideTimer);
-  const current = elements.viewerScreen.classList.contains("is-last-slide");
-  if (direction === 0 || current === wantsLast || slideMotionQuery.matches) {
-    setLastSlide(wantsLast);
-    return;
-  }
-  const targetIndex = state.slideIndex;
-  lastSlideTimer = window.setTimeout(() => {
-    const projectNow = currentProject();
-    if (!projectNow || state.screen !== "viewer" || state.slideIndex !== targetIndex) return;
-    setLastSlide(state.slideIndex === projectNow.slides.length - 1);
-  }, 700);
+  setLastSlide(wantsLast);
 }
 
 function showSlide(index, scrollThumbnail = true, via = "programmatic") {
@@ -2256,7 +2295,7 @@ function showSlide(index, scrollThumbnail = true, via = "programmatic") {
   elements.currentCount.textContent = pad(state.slideIndex + 1);
   elements.fullscreenCurrent.textContent = pad(state.slideIndex + 1);
   const panelFromIndex = project.slides.length - 1;
-  scheduleLastSlide(state.slideIndex >= panelFromIndex, direction);
+  scheduleLastSlide(state.slideIndex >= panelFromIndex);
 
   if (direction === 0) {
     resetArtworkLayers();

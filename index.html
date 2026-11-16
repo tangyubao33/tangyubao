@@ -11,6 +11,133 @@
   <!-- 埋点上报地址（Cloudflare Worker + D1，部署见 analytics/README.md）。
        本地 file:// / localhost 预览默认不上报，只有显式传 ?analytics_endpoint= 时才会上报。 -->
   <meta name="portfolio-analytics-endpoint" content="https://tangyubao-analytics.tangweibao.workers.dev/collect">
+  <script>
+  /* 页面打开成功率探针：独立于 analytics.js，本文件不会因为业务脚本失败而漏报。
+     每次打开上报 boot_start；应用真正渲染完成上报 boot_ready；超时/关键脚本失败上报 boot_fail。
+     事件字段：{id,name,ts,sid:"boot",vid:"boot",pid,screen:"boot",props}，由 Worker 写入 D1。 */
+  (function () {
+    "use strict";
+    var meta = document.querySelector('meta[name="portfolio-analytics-endpoint"]');
+    var endpoint = meta ? meta.content : "";
+    var params = new URLSearchParams(location.search);
+    var override = params.get("analytics_endpoint") || "";
+    if (override) endpoint = override;
+    var preview = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname) || location.protocol === "file:";
+    var force = params.get("analytics_force") === "1";
+    var dnt = navigator.doNotTrack === "1" || window.doNotTrack === "1" || navigator.globalPrivacyControl === true;
+    var site = "tangyubao-portfolio";
+    var bootId = "boot_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+    var started = performance.now();
+    window.__pfBoot = { id: bootId, startedAt: started };
+    if (!endpoint || (preview && !override) || (dnt && !force)) return;
+
+    var done = false;
+    var timer = 0;
+    var poll = 0;
+    var lastError = "";
+    var mode = (function () {
+      var w = innerWidth || 0, h = innerHeight || 0;
+      if (h <= 520 && w > 760) return "short-landscape";
+      if (w <= 760) return "mobile";
+      if (w <= 1100) return "tablet";
+      return "desktop";
+    })();
+
+    function send(name, props) {
+      var body = JSON.stringify({ site: site, events: [{
+        id: bootId + "_" + name, name: name, ts: Date.now(),
+        sid: "boot", vid: "boot", pid: bootId, screen: "boot", props: props || {}
+      }] });
+      try {
+        if (navigator.sendBeacon && navigator.sendBeacon(endpoint, new Blob([body], { type: "text/plain;charset=UTF-8" }))) return;
+        if (window.fetch) fetch(endpoint, {
+          method: "POST", mode: "cors", keepalive: true,
+          headers: { "Content-Type": "text/plain;charset=UTF-8" }, body: body
+        }).catch(function () {});
+      } catch (error) { /* 探针失败不影响页面 */ }
+    }
+
+    function navTiming() {
+      try {
+        var nav = performance.getEntriesByType("navigation")[0];
+        if (!nav) return {};
+        return {
+          ttfb_ms: Math.round(nav.responseStart),
+          dom_ms: Math.round(nav.domContentLoadedEventEnd),
+          load_ms: nav.loadEventEnd ? Math.round(nav.loadEventEnd) : 0
+        };
+      } catch (error) { return {}; }
+    }
+
+    function isReady() {
+      if (document.documentElement.classList.contains("is-booting")) return false;
+      var active = document.querySelector("[data-screen].is-active");
+      if (!active) return false;
+      if (active.dataset.screen === "home") return document.querySelectorAll(".stream-project").length > 0;
+      return true;
+    }
+
+    function finish(ok, reason) {
+      if (done) return;
+      done = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      var elapsed = Math.round(performance.now() - started);
+      var props = {
+        duration_ms: elapsed,
+        slow: elapsed > 3000,
+        reason: reason || "",
+        message: lastError.slice(0, 120),
+        ready_state: document.readyState,
+        cards: document.querySelectorAll(".stream-project").length,
+        mode: mode, vw: innerWidth, vh: innerHeight,
+        dpr: Math.round((devicePixelRatio || 1) * 100) / 100
+      };
+      var timing = navTiming();
+      Object.keys(timing).forEach(function (key) { props[key] = timing[key]; });
+      send(ok ? "boot_ready" : "boot_fail", props);
+    }
+
+    function check() { if (!done && isReady()) finish(true); }
+
+    window.addEventListener("error", function (event) {
+      var target = event.target;
+      if (target && target.tagName === "SCRIPT") {
+        if (String(target.src || "").indexOf("script.js") >= 0) {
+          lastError = "script.js load failed";
+          finish(false, "script_error");
+        }
+        return;
+      }
+      if (event.message) lastError = String(event.message);
+    }, true);
+    window.addEventListener("unhandledrejection", function (event) {
+      lastError = String((event.reason && event.reason.message) || event.reason || "unhandled rejection");
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") {
+        clearTimeout(timer);
+      } else if (!done) {
+        check();
+        if (!done) timer = setTimeout(function () { if (!done) finish(false, lastError ? "js_error" : "timeout"); }, 10000);
+      }
+    });
+    window.addEventListener("load", check);
+    poll = setInterval(check, 100);
+    if (document.readyState === "complete") check();
+    timer = setTimeout(function () { if (!done) finish(false, lastError ? "js_error" : "timeout"); }, 10000);
+
+    send("boot_start", {
+      path: location.pathname + location.hash,
+      ref: document.referrer ? document.referrer.split("?")[0].slice(0, 120) : "",
+      mode: mode, vw: innerWidth, vh: innerHeight,
+      dpr: Math.round((devicePixelRatio || 1) * 100) / 100,
+      lang: navigator.language || "",
+      tz: (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (error) { return ""; } })(),
+      reduced_motion: Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    });
+  })();
+  </script>
   <link rel="stylesheet" href="styles.css?v=20261116n">
   <noscript><style>html.is-booting [data-screen] { visibility: visible; }</style></noscript>
 </head>
@@ -258,7 +385,7 @@
 
 
   <noscript>请启用 JavaScript 以浏览交互式作品集。</noscript>
-  <script src="analytics.js?v=20261116o" defer></script>
-  <script src="script.js?v=20261116q" defer></script>
+  <script src="analytics.js?v=20261116p" defer></script>
+  <script src="script.js?v=20261116r" defer></script>
 </body>
 </html>
