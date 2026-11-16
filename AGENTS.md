@@ -228,6 +228,7 @@
 - **本地隔离**：`file://` 与 `localhost` 默认不启用（不发请求、不写队列），避免站主调试污染线上；自动化验收用 `?analytics_endpoint=<collector>` 显式开启。改 `analytics.js`/`script.js` 时同步提升 `?v=`。
 - **打开成功率探针**：`index.html` 里的内联小脚本独立上报 `boot_start / boot_ready / boot_fail`（不依赖 analytics.js，业务脚本 404/超时也能统计）；就绪判定 = 不再 `is-booting` 且首页有卡片/查看器已激活；10s 超时、`script.js` 加载失败、JS 错误分别记录；本地预览默认跳过。不得把它改成依赖主脚本或第三方 SDK，也不要在探针里采集额外个人信息。
 - **加载性能**：`page_load` 记录 load/DOM/传输/图片体积/请求数；`web_vitals` 记录 LCP/FCP/CLS/INP/TTFB；`artwork_load` 记录作品页图片选图→解码耗时（phase 分 initial/turn，不含 640ms 翻页动画）。聚合输出 `boot`、`artwork`、`resource_errors` 与 `vitals/load` 的 p75；看板「打开成功率 & 加载性能」板块消费这些字段。
+- **访问地域**：Worker 从 Cloudflare 边缘 `request.cf.country/region/city/continent` 取粗粒度地域并写入 D1（`0002_geo` 迁移新增 `region/city/continent` 列）；**原始 IP 不落库、不写日志**，客户端也不发送地域。聚合按会话去重输出 `geo`（国家/省州/城市），看板「访问地域」板块消费。城市精度受 Cloudflare 边缘库限制，可能为空。
 
 - **数据端**：`analytics/summary.js` 是唯一聚合实现（Worker/本地共用），看板只读 `/api/summary` 的 `{current, previous}`；新增作品同步 `PROJECTS` 注册表。改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序执行并跑 `node analytics/tools/verify-summary.mjs`。
 - **运维**：`cd analytics/worker && wrangler deploy`；D1 备份 `wrangler d1 export`；删访客数据 `DELETE FROM events WHERE vid=…`；保留策略由 cron 清理；`workers.dev` 国内不稳时绑定自定义域名。
@@ -261,7 +262,7 @@
 - `assets/demo/ppt-demo.png` + `assets/slide-thumbs/demo-01.jpg` 保留为 `.qa/media/compose.html` 的默认测试素材，不在站点里引用。
 - 占位项目（抖音分成 / 抖音精选 / 黄金眼 / 小米邮箱 / WPS Office）已从数据里移除；`disabled` 兜底与未知项目回退逻辑保留，`#project/douyin/douyin-revenue` 现在回退到该项目导航页。
 - PNG 图层已在代码与编辑器里跑通，但**还没接过真实的分层 PPT**；真实 `.pptx` 到手后先用 `.qa/media/pptx2layers.py` 对一遍坐标再入库。
-- 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）。
+- 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）；`0002_geo` 迁移已应用，D1 增加 `region/city/continent` 列（由 Cloudflare 边缘写入，不存 IP）。
 - 看板令牌不写入仓库，本机保存在 `analytics/local/.data/dashboard-token.txt`（已 gitignore）；本地 `file://` / `localhost` 预览默认不上报，需显式加 `?analytics_endpoint=…`（或 `?analytics_force=1`）才会走线上 collector。
 - `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
 - 首屏图片已改为响应式：封面 640/960/1280/1920/2560 WebP `srcset` + 首图 preload，4G 限速下桌面首页图片约 0.31MB（原 ~2.9MB）、LCP ~2.8s（原 ~15.7s）。后续可继续：① 变体改 AVIF（再省 25–35%）；② 预览缩略图转 WebP（当前单项目约 0.12MB）；③ 预览第 1 页 2560 WebP 约 0.27MB，可评估首开先显示 1280 再后台升档；④ 国内访问可把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余大头）。详见 `analytics/体验分析报告.md`。
@@ -377,3 +378,5 @@
 - **2026-11-16**：Cloudflare Worker + D1 实际部署完成（`tangyubao-analytics.tangweibao.workers.dev`，D1 `tangyubao-analytics` / `422352f9-91df-44b9-bbd8-f62df30dedf8`），`DASHBOARD_TOKEN` 用 secret 写入；`index.html` meta 切到线上 collector，看板支持 `?token=` 并转存 sessionStorage。同时给 `analytics.js` 加本地预览隔离（`file://`/localhost 默认不上报，需 `?analytics_endpoint=` 才上报）。验收：`/health` 200、`/collect` 收事件、`/api/summary` 需 Bearer、测试事件清理后归零。
 
 - **2026-11-16**：新增「网页打开成功率 + 加载性能」监控层：`index.html` 内联启动探针（boot_start/ready/fail，独立于 analytics.js）、`artwork_load`（作品图加载耗时，首屏/翻页分开）、Web Vitals 增补 FCP/load、资源失败聚合；`summary.js` 输出 `boot/artwork/resource_errors` 与 p75，看板新增对应板块、趋势与诊断规则。本地验收：正常打开 100% 成功、阻断 script.js 上报 script_error、图片首屏/翻页 p75 可读。
+
+- **2026-11-16**：新增访问地域监控（不存原始 IP）：Worker 采集 Cloudflare 边缘 `cf.country/region/city/continent`，D1 增加 `region/city/continent` 字段（`0002_geo` 迁移已应用），`summary` 输出 `geo`（国家/省州/城市，按会话去重），看板新增「访问地域」板块；README 隐私说明同步为「IP 仅用于边缘解析、不落库」。

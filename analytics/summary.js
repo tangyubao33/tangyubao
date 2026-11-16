@@ -60,7 +60,11 @@ function normalize(event) {
     pid: String(event.pid || ""),
     screen: String(event.screen || ""),
     name: String(event.name || ""),
-    props: propsOf(event)
+    props: propsOf(event),
+    country: String(event.country || ""),
+    region: String(event.region || ""),
+    city: String(event.city || ""),
+    continent: String(event.continent || "")
   };
 }
 
@@ -120,6 +124,7 @@ export function buildSummary(rawRows, options = {}) {
   events.sort((a, b) => a.ts - b.ts);
 
   const sessions = new Map();
+  const geoBySession = new Map();
   const viewerOpens = new Map();
   const aboutOpens = new Map();
   const latestAboutBySession = new Map();
@@ -195,6 +200,17 @@ export function buildSummary(rawRows, options = {}) {
       return;
     }
     const session = sessionOf(event);
+    if (event.country || event.region || event.city) {
+      const previousGeo = geoBySession.get(event.sid);
+      if (!previousGeo || event.name === "page_view") {
+        geoBySession.set(event.sid, {
+          country: event.country,
+          region: event.region,
+          city: event.city,
+          continent: event.continent
+        });
+      }
+    }
     if (session.vid) visitors.add(session.vid);
 
     const day = dayKey(event.ts, offset);
@@ -615,6 +631,40 @@ export function buildSummary(rawRows, options = {}) {
     session.scrollBuckets.size === 0
   ).length;
 
+  const geoCountries = new Map();
+  const geoRegions = new Map();
+  const geoCities = new Map();
+  let geoKnown = 0;
+  geoBySession.forEach((geo) => {
+    if (!geo.country && !geo.region && !geo.city) return;
+    geoKnown += 1;
+    const countryCode = String(geo.country || "").toUpperCase();
+    if (countryCode) geoCountries.set(countryCode, (geoCountries.get(countryCode) || 0) + 1);
+    const regionKey = `${countryCode}|${geo.region || ""}`;
+    if (geo.region || countryCode) geoRegions.set(regionKey, (geoRegions.get(regionKey) || 0) + 1);
+    const cityKey = `${countryCode}|${geo.region || ""}|${geo.city || ""}`;
+    if (geo.city || geo.region || countryCode) geoCities.set(cityKey, (geoCities.get(cityKey) || 0) + 1);
+  });
+  const geo = {
+    samples: geoKnown,
+    unknown: Math.max(0, sessionCount - geoKnown),
+    countries: [...geoCountries.entries()]
+      .map(([code, sessions]) => ({ code, sessions, pct: pct(sessions, sessionCount) }))
+      .sort((a, b) => b.sessions - a.sessions),
+    regions: [...geoRegions.entries()]
+      .map(([key, sessions]) => {
+        const [country, region] = key.split("|");
+        return { country, region, sessions, pct: pct(sessions, sessionCount) };
+      })
+      .sort((a, b) => b.sessions - a.sessions),
+    cities: [...geoCities.entries()]
+      .map(([key, sessions]) => {
+        const [country, region, city] = key.split("|");
+        return { country, region, city, sessions, pct: pct(sessions, sessionCount) };
+      })
+      .sort((a, b) => b.sessions - a.sessions)
+  };
+
   const deviceStats = new Map();
   const referrerStats = new Map();
   sessionList.forEach((session) => {
@@ -968,6 +1018,7 @@ export function buildSummary(rawRows, options = {}) {
     funnel,
     devices: devices,
     referrers: sortCounts(referrerStats),
+    geo,
     vitals,
     load: loadStats,
     boot,

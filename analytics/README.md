@@ -63,6 +63,7 @@ http://127.0.0.1:8788/?analytics_endpoint=http%3A%2F%2F127.0.0.1%3A8788%2Fcollec
 | 关于我打开率 | 打开过弹窗的会话 / 全部会话 | 两个入口合并 |
 | 简历下载 | 点击 `.about-download` 的次数 / 会话 | 是「下载意图」；浏览器是否落盘无法判断 |
 | 下载 / 关于我 | 下载次数 / 关于我打开次数 | 衡量弹窗内转化 |
+| 访问国家 / 省州 / 城市 | 按会话去重的地域分布 | Cloudflare 边缘从访问 IP 解析后只存粗粒度字段，**不存 IP** |
 | 网页打开成功率 | `boot_ready` / `boot_start` | 内联启动探针统计，独立于 analytics.js；超时/关键脚本失败计失败 |
 | 应用就绪耗时 | `boot_ready.duration_ms` | 导航开始 → 首页/查看器渲染完成；p75、慢打开率（>3s） |
 | 打开失败原因 | `boot_fail.reason` | timeout / js_error / script_error / incomplete |
@@ -78,6 +79,7 @@ http://127.0.0.1:8788/?analytics_endpoint=http%3A%2F%2F127.0.0.1%3A8788%2Fcollec
 ## 3. 事件字典
 
 所有事件字段：`id, ts, sid, vid, pid, screen, name, props`（`props` 只允许字符串/数字/布尔，单值 ≤200 字符）。
+服务端还会在写入时附加 `country / region / city / continent`（来自 Cloudflare 边缘 `request.cf`，客户端不发送，也**不保存 IP**）。
 
 | 事件 | 触发时机 | 关键 props |
 |---|---|---|
@@ -129,7 +131,7 @@ npx wrangler@4 login
 # 2) 建 D1 数据库，把输出的 database_id 填进 wrangler.toml
 npx wrangler@4 d1 create tangyubao-analytics
 
-# 3) 建表
+# 3) 建表 / 应用迁移（0001 初始表，0002 增加地域字段）
 npx wrangler@4 d1 migrations apply tangyubao-analytics --remote
 
 # 4) 设置看板令牌（自己生成一个长随机串，别用弱口令）
@@ -259,6 +261,10 @@ node --check script.js
     funnel: { browse: [...], convert: [...] },
     devices: [{ name, sessions, pct, viewer_opens, bounce_rate, completion_rate, avg_depth_pct }],
     referrers: [{ name, sessions, pct }],
+    geo: { samples, unknown,
+           countries: [{ code, sessions, pct }],
+           regions: [{ country, region, sessions, pct }],
+           cities: [{ country, region, city, sessions, pct }] },
     vitals: { samples, lcp_p75, fcp_p75, load_p75, cls_p75, inp_p75, ttfb_p75 },
     load: { samples, avg_transfer_kb, avg_image_kb, avg_load_ms, avg_resources,
             load_p75_ms, dom_p75_ms, transfer_kb_p75, image_kb_p75, resources_p75 },
@@ -308,7 +314,8 @@ npx wrangler@4 secret put DASHBOARD_TOKEN
 
 ## 8. 隐私与合规
 
-- **没有 Cookie**，不写指纹、不采集页面内容/输入、不存 IP、不存 User-Agent、不接第三方。
+- **没有 Cookie**，不写指纹、不采集页面内容/输入、**不存 IP**、不存 User-Agent、不接第三方。
+- 地域数据来自 Cloudflare 边缘：Worker 在收到事件时读取 `request.cf.country/region/city/continent`，只把这几个粗粒度字段写入 D1；原始 IP 不落库、不写日志。城市精度取决于 Cloudflare 的边缘库，可能为空或与实际城市有偏差。
 - 仅存：匿名 `visitor_id`（localStorage，随机）、会话 ID（sessionStorage）、页面事件与上文列出的 props；Worker 只额外记录 Cloudflare 边缘提供的国家代码。
 - `Do Not Track` / `Global Privacy Control` 默认直接关闭采集（不上报、不写本地队列）。
 - 页面加载前后完全可移除：删掉 `index.html` 里的 `analytics.js` 一行即可；历史数据用上面的 SQL 删除。

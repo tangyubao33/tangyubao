@@ -423,6 +423,25 @@
       </div>
     </section>
 
+    <div class="section-head"><h2>访问地域</h2><span class="hint">不存原始 IP；仅 Cloudflare 边缘解析出的国家 / 省州 / 城市（按会话去重）</span></div>
+    <section class="grid two">
+      <div class="card">
+        <h3>国家 / 地区 · 省州</h3>
+        <p class="card-sub">访客来源分布；IP 仅用于边缘解析，不落库</p>
+        <div id="geoStats" class="stat-list"></div>
+        <div class="divider"></div>
+        <div id="geoCountries" class="bars"></div>
+        <div class="divider"></div>
+        <div id="geoRegions" class="bars"></div>
+      </div>
+      <div class="card">
+        <h3>城市</h3>
+        <p class="card-sub">Top 12 城市；城市精度受 Cloudflare 边缘数据限制</p>
+        <div id="geoCities" class="bars"></div>
+        <p class="muted" style="margin:12px 0 0;font-size:11.5px">说明：只保存国家 / 省州 / 城市三个粗粒度字段，不保存 IP、经纬度或精确地址。可在 D1 中按需删除。</p>
+      </div>
+    </section>
+
     <div class="section-head"><h2>体验诊断</h2><span class="hint">基于当前数据自动生成，按严重程度排序</span></div>
     <section class="card insights" id="insights"></section>
 
@@ -496,6 +515,10 @@
     aboutFolds: document.getElementById("aboutFolds"),
     resumeStats: document.getElementById("resumeStats"),
     resumeFunnel: document.getElementById("resumeFunnel"),
+    geoStats: document.getElementById("geoStats"),
+    geoCountries: document.getElementById("geoCountries"),
+    geoRegions: document.getElementById("geoRegions"),
+    geoCities: document.getElementById("geoCities"),
     deviceStats: document.getElementById("deviceStats"),
     deviceBars: document.getElementById("deviceBars"),
     referrerBars: document.getElementById("referrerBars"),
@@ -740,6 +763,7 @@
     renderViewer(current);
     renderAbout(current);
     renderStructure(current);
+    renderGeo(current);
     renderInsights(current, previous);
     els.metaLine.textContent = "数据源：" + (state.demo ? "内置示例数据（合成）" : (REMOTE_BASE ? (REMOTE_BASE || location.origin) : "本地 collector")) +
       " · 生成时间：" + new Date(current.meta.generated_at).toLocaleString("zh-CN") +
@@ -1047,6 +1071,73 @@
       { label: "打开关于我", sessions: o.about_open_sessions, pct: o.about_open_rate },
       { label: "下载简历", sessions: o.resume_download_sessions, pct: o.resume_download_rate }
     ], "convert");
+  }
+
+  var COUNTRY_LABELS = {
+    CN: "中国", HK: "中国香港", MO: "中国澳门", TW: "中国台湾",
+    US: "美国", SG: "新加坡", JP: "日本", GB: "英国", CA: "加拿大",
+    AU: "澳大利亚", DE: "德国", FR: "法国", KR: "韩国", IN: "印度",
+    NL: "荷兰", SE: "瑞典", CH: "瑞士", BR: "巴西", RU: "俄罗斯",
+    AE: "阿联酋", MY: "马来西亚", TH: "泰国", VN: "越南", ID: "印度尼西亚",
+    PH: "菲律宾", IT: "意大利", ES: "西班牙", MX: "墨西哥", TR: "土耳其",
+    IL: "以色列", NZ: "新西兰", IE: "爱尔兰", PL: "波兰", UA: "乌克兰",
+    ZA: "南非", SA: "沙特阿拉伯", EG: "埃及", AR: "阿根廷", CL: "智利",
+    CO: "哥伦比亚", PT: "葡萄牙", BE: "比利时", AT: "奥地利", DK: "丹麦",
+    NO: "挪威", FI: "芬兰", CZ: "捷克", GR: "希腊", RO: "罗马尼亚",
+    HU: "匈牙利", RU: "俄罗斯"
+  };
+  var REGION_LABELS = {
+    Beijing: "北京", Shanghai: "上海", Zhejiang: "浙江", Guangdong: "广东",
+    Jiangsu: "江苏", Sichuan: "四川", Hubei: "湖北", Hunan: "湖南",
+    Fujian: "福建", Shandong: "山东", Henan: "河南", Hebei: "河北",
+    Shaanxi: "陕西", Chongqing: "重庆", Tianjin: "天津", Liaoning: "辽宁",
+    Anhui: "安徽", Jiangxi: "江西", Guangxi: "广西", Yunnan: "云南",
+    Guizhou: "贵州", Shanxi: "山西", Heilongjiang: "黑龙江", Jilin: "吉林",
+    "Inner Mongolia": "内蒙古", Xinjiang: "新疆", Gansu: "甘肃", Hainan: "海南",
+    Ningxia: "宁夏", Qinghai: "青海", Tibet: "西藏", "Hong Kong": "中国香港",
+    Taiwan: "中国台湾", Macau: "中国澳门", California: "加利福尼亚",
+    "New York": "纽约", Singapore: "新加坡", Tokyo: "东京", England: "英格兰",
+    Ontario: "安大略", "New South Wales": "新南威尔士", Bavaria: "巴伐利亚",
+    "Ile-de-France": "法兰西岛"
+  };
+  function countryLabel(code) {
+    return COUNTRY_LABELS[code] || code || "未知";
+  }
+  function regionLabel(region) {
+    return REGION_LABELS[region] || region || "未知";
+  }
+
+  function renderGeo(current) {
+    var geo = current.geo || { samples: 0, countries: [], regions: [], cities: [] };
+    var samples = geo.samples || 0;
+    els.geoStats.innerHTML = [
+      stat("有地域数据会话", fmtNum(samples), geo.unknown ? "未知 " + fmtNum(geo.unknown) + " 个会话" : "覆盖全部会话"),
+      stat("国家 / 地区", fmtNum((geo.countries || []).length), (geo.countries || [])[0] ? "最多：" + countryLabel(geo.countries[0].code) : ""),
+      stat("省 / 州", fmtNum((geo.regions || []).length), ""),
+      stat("城市", fmtNum((geo.cities || []).length), "")
+    ].join("");
+    bars(els.geoCountries, (geo.countries || []).slice(0, 12).map(function (item) {
+      return { name: countryLabel(item.code), value: item.sessions, display: fmtNum(item.sessions) + " · " + fmtPct(item.pct) };
+    }), { color: "#6ea8fe" });
+    bars(els.geoRegions, (geo.regions || []).slice(0, 12).map(function (item) {
+      return {
+        name: countryLabel(item.country) + " · " + regionLabel(item.region),
+        value: item.sessions,
+        display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
+      };
+    }), { color: "#b58cff" });
+    bars(els.geoCities, (geo.cities || []).slice(0, 12).map(function (item) {
+      return {
+        name: countryLabel(item.country) + " · " + (item.city || regionLabel(item.region)),
+        value: item.sessions,
+        display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
+      };
+    }), { color: "#3ddc97" });
+    if (!samples) {
+      els.geoCountries.innerHTML = '<p class="muted" style="margin:0">暂无地域数据；Worker 需要部署 0002_geo 迁移后才会写入国家/省州/城市。</p>';
+      els.geoRegions.innerHTML = "";
+      els.geoCities.innerHTML = "";
+    }
   }
 
   function renderStructure(current) {

@@ -178,7 +178,10 @@ const server = createServer(async (request, response) => {
           screen: String(event.screen || "").slice(0, 30),
           name: String(event.name),
           props: event.props && typeof event.props === "object" ? event.props : {},
-          country: "LOCAL"
+          country: "LOCAL",
+          region: "Local",
+          city: "Local",
+          continent: "LOCAL"
         });
       });
       events = events.concat(accepted);

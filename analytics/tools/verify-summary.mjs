@@ -46,7 +46,10 @@ check("device shares sum near 100", Math.abs(current.devices.reduce((sum, device
 check("viewer sources present", current.viewer.sources.length > 0);
 check("exit reasons present", current.viewer.exit_reasons.length > 0);
 check("no NaN in overview", Object.values(current.overview).every((value) => typeof value !== "number" || Number.isFinite(value)));
-check("dashboard contract keys", ["overview", "daily", "projects", "about", "home", "viewer", "funnel", "devices", "referrers", "vitals", "load", "boot", "artwork", "resource_errors", "errors", "actions"].every((key) => key in current));
+check("dashboard contract keys", ["overview", "daily", "projects", "about", "home", "viewer", "funnel", "devices", "referrers", "geo", "vitals", "load", "boot", "artwork", "resource_errors", "errors", "actions"].every((key) => key in current));
+check("geo samples > 0", current.geo.samples > 0, String(current.geo.samples));
+check("geo countries/regions/cities present", current.geo.countries.length > 0 && current.geo.regions.length > 0 && current.geo.cities.length > 0);
+check("geo pct in range", current.geo.countries.every((item) => item.pct >= 0 && item.pct <= 100));
 check("boot attempts >= successes", current.boot.attempts >= current.boot.successes, `${current.boot.successes}/${current.boot.attempts}`);
 check("boot success rate in range", current.boot.success_rate >= 0 && current.boot.success_rate <= 100, String(current.boot.success_rate));
 check("boot failure reasons reported", current.boot.fail_reasons.length > 0);

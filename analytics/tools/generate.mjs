@@ -26,6 +26,25 @@ const REFERRERS = [
   { label: "站内跳转", type: "internal", weight: 0.08 }
 ];
 
+const GEOS = [
+  { country: "CN", region: "Beijing", city: "Beijing", continent: "AS", weight: 0.2 },
+  { country: "CN", region: "Shanghai", city: "Shanghai", continent: "AS", weight: 0.17 },
+  { country: "CN", region: "Zhejiang", city: "Hangzhou", continent: "AS", weight: 0.11 },
+  { country: "CN", region: "Guangdong", city: "Shenzhen", continent: "AS", weight: 0.1 },
+  { country: "CN", region: "Jiangsu", city: "Nanjing", continent: "AS", weight: 0.06 },
+  { country: "CN", region: "Sichuan", city: "Chengdu", continent: "AS", weight: 0.04 },
+  { country: "SG", region: "Singapore", city: "Singapore", continent: "AS", weight: 0.06 },
+  { country: "US", region: "California", city: "San Jose", continent: "NA", weight: 0.06 },
+  { country: "US", region: "New York", city: "New York", continent: "NA", weight: 0.03 },
+  { country: "JP", region: "Tokyo", city: "Tokyo", continent: "AS", weight: 0.03 },
+  { country: "GB", region: "England", city: "London", continent: "EU", weight: 0.03 },
+  { country: "CA", region: "Ontario", city: "Toronto", continent: "NA", weight: 0.02 },
+  { country: "AU", region: "New South Wales", city: "Sydney", continent: "OC", weight: 0.02 },
+  { country: "DE", region: "Bavaria", city: "Munich", continent: "EU", weight: 0.02 },
+  { country: "FR", region: "Ile-de-France", city: "Paris", continent: "EU", weight: 0.02 },
+  { country: "HK", region: "Hong Kong", city: "Hong Kong", continent: "AS", weight: 0.03 }
+];
+
 const EXIT_REASONS = ["back", "esc", "brand_home", "route"];
 const FOLDS = ["about-highlights", "jd-duties", "douyin-duties"];
 
@@ -89,6 +108,10 @@ export function generateSampleEvents(options = {}) {
       pid: session.pid,
       screen: session.screen || "home",
       name,
+      country: session.geo ? session.geo.country : "",
+      region: session.geo ? session.geo.region : "",
+      city: session.geo ? session.geo.city : "",
+      continent: session.geo ? session.geo.continent : "",
       props: Object.assign({}, props || {})
     });
   };
@@ -143,6 +166,7 @@ export function generateSampleEvents(options = {}) {
         vid: visitor.id,
         pid: makeId("p"),
         screen: "home",
+        geo: pickWeighted(GEOS),
         startedAt: ts,
         active: 0
       };
