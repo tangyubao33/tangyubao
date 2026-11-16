@@ -707,8 +707,13 @@
     els.rangeHint.textContent = rangeFrom ? rangeFrom + " – " + rangeTo + " · " + fmtNum(current.meta.event_count) + " 条事件" : "";
 
     var sessions = o.sessions || 0;
+    var boot = current.boot || { attempts: 0, successes: 0 };
+    var previousBoot = previous.boot || {};
     var kpiRows = [
       kpi("访问会话", fmtNum(sessions), "独立访客 " + fmtNum(o.visitors) + " · 平均 " + fmtMs(o.avg_session_ms), delta(o.sessions, p.sessions, "count", "up")),
+      kpi("网页打开成功率", boot.attempts ? fmtPct(boot.success_rate) : "—",
+        boot.attempts ? fmtNum(boot.successes) + " / " + fmtNum(boot.attempts) + " 次打开" : "等待新数据",
+        delta(boot.success_rate, previousBoot.success_rate, "rate", "up")),
       kpi("首页曝光会话", fmtNum(o.home_sessions), "首页浏览 " + fmtNum(o.home_views) + " 次 · 封面曝光 " + fmtNum(o.impressions) + " 次", delta(o.home_sessions, p.home_sessions, "count", "up")),
       kpi("作品点击", fmtNum(o.card_clicks), "点击会话率 " + fmtPct(o.click_session_rate), delta(o.card_clicks, p.card_clicks, "count", "up")),
       kpi("作品打开", fmtNum(o.viewer_opens), "打开率 " + fmtPct(sessions ? (o.viewer_sessions / sessions) * 100 : 0), delta(o.viewer_opens, p.viewer_opens, "count", "up")),
