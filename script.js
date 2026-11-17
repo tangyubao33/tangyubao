@@ -122,7 +122,13 @@ function updateCoverSizes(root) {
   scope.querySelectorAll("img[data-cover]").forEach((img) => {
     const card = img.closest(".stream-project, .project-card, .other-project");
     if (!card) return;
-    const rect = card.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    // Phone home cards are "cover + caption": the requested variant depends on
+    // the image box, not the whole card (the caption would inflate it).
+    const imageRect = img.getBoundingClientRect();
+    const rect = isMobileLayout() && card.classList.contains("stream-project") && imageRect.width && imageRect.height
+      ? imageRect
+      : cardRect;
     if (!rect.width || !rect.height) return;
     const cover = img.dataset.cover;
     // Home stream cards always use the 16:9 cover: the resting portrait box
@@ -140,9 +146,7 @@ function updateCoverSizes(root) {
       return;
     }
     const aspect = rect.width / rect.height;
-    // 0.8 covers the phone list cards (a 4:5 cover is exactly 0.8). Their
-    // portrait srcset is the crop0.8 set, so no extra cropping happens.
-    if (aspect < 0.81) {
+    if (aspect < 0.8) {
       const sizes = `${Math.max(1, Math.ceil(rect.height * 0.8))}px`;
       if (img.dataset.coverMode !== "portrait") {
         img.dataset.coverMode = "portrait";

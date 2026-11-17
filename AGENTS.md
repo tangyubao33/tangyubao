@@ -416,8 +416,8 @@
 ### 7.2 首页：隐藏简历信息 + 纵向作品列表
 
 - 手机端隐藏 `.home-profile` 整块（「简历 & 个人作品集」+ 头像 + 姓名 + 学历/职位），首屏只保留 `Project Design / Portfolio 2016~2026` 标题；联系方式仍从右上角「关于我」进入。
-- 首页从「单屏 + 横向阻尼流」改为**原生纵向滚动页**：`.home-screen{overflow-y:auto}`、`.work-stream` 改为 block、`.experience-group` 改为块级（信息头在上、封面列表在下）、`.group-projects` 改为单列 grid、封面卡全宽 `aspect-ratio:4/5`、间距 14px；进度条隐藏，页脚回到文档流末尾（含 `env(safe-area-inset-bottom)` 留白）。
-- 封面继续走 `assets/thumbs/*.crop0.8.*` 竖版裁切；`updateCoverSizes()` 的竖卡判定从 `< 0.8` 放宽到 `< 0.81`，因为 4:5 正好等于 0.8（其它卡片比例不受影响）。
+- 首页从「单屏 + 横向阻尼流」改为**原生纵向滚动页**：`.home-screen{overflow-y:auto}`、`.work-stream` 改为 block、`.experience-group` 改为块级（信息头在上、封面列表在下）、`.group-projects` 改为单列 grid、间距 14px；进度条隐藏，页脚回到文档流末尾（含 `env(safe-area-inset-bottom)` 留白）。
+- **手机首页封面完整摊开、不左右裁切（2026-11-17 调整）**：封面按原始 **16:9** 全宽显示（`object-fit:cover` 但比例一致，等于整图），不再使用 `crop0.8` 居中裁切；项目名/页数/序号/类型移到**封面下方**（`.stream-project` 改为 flex 换行：图片 100% 宽、信息在左、序号与类型右对齐），避免叠在封面自带的标题上。封面图按**图片自身矩形**选 16:9 变体（`sizes=图片宽`，390 宽选 w1280、320 宽选 w960），`crop0.8` 竖版裁切在手机上不再使用；桌面竖卡逻辑（含 hover 与项目页）完全不变。
 - 横向流引擎在手机上整体关闭：`measureStream / applyStream / streamFrame / runStream` 早退，滚轮、拖拽、`pointerover`、`armStreamHover`、键盘左右键、`revealStreamCard` 全部被 `isMobileLayout()` 拦截；CSS 兜底 `transform:none !important`，`:focus-visible` 不再展开。
 - 首页滚动位置在离开时记入 `homeScrollMemory`，返回首页时恢复（与桌面保留横向偏移的行为一致）。
 
@@ -436,7 +436,7 @@
 
 ### 7.4 验收与回归
 
-- 手机（390×844 / 375×812 / 360×800 / 320×568 / 414×896 / 430×932）：无横向溢出（`document.body.scrollWidth === innerWidth`）、无 404、无 JS 报错；首页 6 张封面按 4:5 平铺，页码/文案不互压；预览连续平铺、页码 01→25 正确、视频页可播放、叠层页状态齐全、热区可点；返回首页滚动位置恢复；旋转与跨断点重建正常。
+- 手机（390×844 / 375×812 / 360×800 / 320×568 / 414×896 / 430×932）：无横向溢出（`document.body.scrollWidth === innerWidth`）、无 404、无 JS 报错；首页 6 张封面按 16:9 完整铺开、文字在封面下方且不互压；预览连续平铺、页码 01→25 正确、视频页可播放、叠层页状态齐全、热区可点；返回首页滚动位置恢复；旋转与跨断点重建正常。
 - 桌面回归：1920×1080 / 1440×900 / 1280×800 / 1024×768 / 768×1024 与改动前逐像素对比，除 1px 渐变分隔线的亚像素噪点外完全一致。
 - 手机横屏（844×390）仍走原 `max-height:520` 紧凑横屏布局（横向流 + 单帧预览 + 缩略图），与旧版一致。
 

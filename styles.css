@@ -1012,7 +1012,7 @@ img, video {
 
    桌面 / 平板 / 手机横屏完全沿用上面的原有规则，这一节只覆盖手机竖屏：
    1) 首页隐藏简历 & 个人信息块，改成正常的纵向滚动页面；
-   2) 横向阻尼作品流改成纵向列表（每段经历一组，封面全宽 4:5 平铺）；
+   2) 横向阻尼作品流改成纵向列表（每段经历一组，封面 16:9 完整铺开、不裁切）；
    3) 作品预览改成连续纵向大图平铺，不再有缩略图条。
 
    JS 侧对应：script.js 的 isMobileLayout() / mobileLayoutQuery；横向流引擎
@@ -1088,22 +1088,62 @@ img, video {
     width: auto;
     gap: 14px;
   }
-  /* 全宽 4:5 封面：与 assets/thumbs/*.crop0.8.* 裁切比例一致，不被二次裁切 */
+  /* 全宽 16:9 封面完整铺开、不做左右裁切；项目名/页数移到封面下方，
+     避免叠在封面自带的标题上（手机端以「看全封面」为准） */
   .stream-project {
-    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    column-gap: 12px;
+    row-gap: 8px;
     width: 100%;
     height: auto;
     max-height: none;
-    aspect-ratio: 4 / 5;
+    aspect-ratio: auto;
+    padding: 0 0 18px;
+    overflow: visible;
+    background: transparent;
     animation: none;
   }
-  .stream-project-info { top: 18px; left: 18px; right: 18px; gap: 5px; }
+  .stream-project img {
+    flex: 0 0 100%;
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background: #151b22;
+    filter: none;
+  }
+  .stream-project::after { display: none; }
+  .stream-project-info {
+    order: 1;
+    flex: 1 1 auto;
+    position: static;
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 0;
+  }
   .stream-project-info b { font-size: 15px; line-height: 1.25; }
-  .stream-project-info small { font-size: 8.5px; }
-  .stream-project-top { left: 18px; right: 18px; bottom: 16px; }
+  .stream-project-info small { color: rgba(255, 255, 255, .5); font-size: 8.5px; letter-spacing: .1em; }
+  .stream-project-top {
+    order: 2;
+    flex: 0 0 auto;
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    padding: 2px 0 0;
+    color: rgba(255, 255, 255, .5);
+  }
   .stream-project-top i, .stream-project-top em { font-size: 8.5px; }
-  .stream-project::after { opacity: .82; }
-  .stream-project.is-pending::before { top: 56px; left: 18px; }
+  /* the caption stays visible even if a keyboard focuses a card */
+  .stream-project.is-expanded .stream-project-info,
+  .stream-project:focus-visible .stream-project-info { opacity: 1; }
+  .stream-project.is-pending::before { position: static; order: 3; margin-top: 4px; }
   .stream-progress { display: none; }
 
   /* 页脚回到文档流末尾，不再绝对定位在首屏底部 */
