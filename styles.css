@@ -1027,7 +1027,7 @@ img, video {
     -webkit-overflow-scrolling: touch;
   }
   .home-heading {
-    --home-type: clamp(19px, 5.6vw, 26px);
+    --home-type: clamp(24px, 7.6vw, 34px);
     height: auto;
     min-height: 0;
     padding: 22px 20px 46px;
@@ -1035,7 +1035,7 @@ img, video {
   }
   .home-heading-main { gap: 0; }
   .home-heading h1 { margin: 0; font-size: var(--home-type); }
-  .portfolio-years { font-size: clamp(13px, 4.4vw, 18px); }
+  .portfolio-years { font-size: clamp(15px, 5vw, 21px); }
   /* 简历 / 个人信息块整块隐藏（顶部「关于我」入口仍在） */
   .home-profile { display: none; }
 

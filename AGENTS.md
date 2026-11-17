@@ -418,7 +418,7 @@
 - 手机端隐藏 `.home-profile` 整块（「简历 & 个人作品集」+ 头像 + 姓名 + 学历/职位），首屏只保留 `Project Design / Portfolio 2016~2026` 标题；联系方式仍从右上角「关于我」进入。
 - 首页从「单屏 + 横向阻尼流」改为**原生纵向滚动页**：`.home-screen{overflow-y:auto}`、`.work-stream` 改为 block、`.experience-group` 改为块级（信息头在上、封面列表在下）、`.group-projects` 改为单列 grid、间距 14px；进度条隐藏，页脚回到文档流末尾（含 `env(safe-area-inset-bottom)` 留白）。
 - **手机首页封面完整摊开、不左右裁切（2026-11-17 调整）**：封面按原始 **16:9** 全宽显示（与卡片比例一致，等于整图），不再使用 `crop0.8` 居中裁切；**项目名/页数/序号/类型在手机上全部隐藏**（`.stream-project-info`、`.stream-project-top` `display:none`），首页只留纯封面，读屏名称仍由按钮 `aria-label` 提供。封面图按**图片自身矩形**选 16:9 变体（`sizes=图片宽`，390 宽选 w1280、320 宽选 w960），`crop0.8` 竖版裁切在手机上不再使用；桌面竖卡逻辑（含 hover 与项目页）完全不变。
-- **手机首页标题放大 + 与经历拉大间距（2026-11-17 调整）**：`--home-type`（手机）从 `clamp(16.7px, 4.6vw, 21px)` 提到 **`clamp(19px, 5.6vw, 26px)`**（320→19、390→21.8、430→24.1），手写年份同步到 `clamp(13px, 4.4vw, 18px)`；`.home-heading` 底内边距由 10px 提到 **46px**，标题底边到第一条经历信息顶边实测约 **52px**（原来约 26px）。
+- **手机首页标题放大 + 与经历拉大间距（2026-11-17 调整）**：`--home-type`（手机）从 `clamp(16.7px, 4.6vw, 21px)` 提到 **`clamp(24px, 7.6vw, 34px)`**（320→24.3、390→29.6、430→32.7、760→34），手写年份同步到 `clamp(15px, 5vw, 21px)`；`.home-heading` 底内边距由 10px 提到 **46px**，标题底边到第一条经历信息顶边实测约 **52px**（原来约 26px）。
 - 横向流引擎在手机上整体关闭：`measureStream / applyStream / streamFrame / runStream` 早退，滚轮、拖拽、`pointerover`、`armStreamHover`、键盘左右键、`revealStreamCard` 全部被 `isMobileLayout()` 拦截；CSS 兜底 `transform:none !important`，`:focus-visible` 不再展开。
 - 首页滚动位置在离开时记入 `homeScrollMemory`，返回首页时恢复（与桌面保留横向偏移的行为一致）。
 
