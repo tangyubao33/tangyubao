@@ -400,3 +400,49 @@
 - **2026-11-16**：新增「网页打开成功率 + 加载性能」监控层：`index.html` 内联启动探针（boot_start/ready/fail，独立于 analytics.js）、`artwork_load`（作品图加载耗时，首屏/翻页分开）、Web Vitals 增补 FCP/load、资源失败聚合；`summary.js` 输出 `boot/artwork/resource_errors` 与 p75，看板新增对应板块、趋势与诊断规则。本地验收：正常打开 100% 成功、阻断 script.js 上报 script_error、图片首屏/翻页 p75 可读。
 
 - **2026-11-16**：新增访问地域监控（不存原始 IP），提交 `5fbdf79`：Worker 采集 Cloudflare 边缘 `cf.country/region/city/continent`，D1 增加 `region/city/continent` 字段（`0002_geo` 迁移已应用），`summary` 输出 `geo`（国家/省州/城市，按会话去重），看板新增「访问地域」板块；README 隐私说明同步为「IP 仅用于边缘解析、不落库」。验收：测试请求被边缘识别为 `JP / Tokyo / Asagaya-minami`，看板国家/省州/城市与中文标签正常；旧数据只有 `country` 时省州显示「未知」，新事件才带完整地区。上线后已清空此前 1,361 条自动化测试事件（出口 IP 均为日本），真实访客从 0 开始积累；GitHub Pages 部署 `43843941498` 成功。
+
+## 7. 手机端纵向布局（2026-11-17）
+
+> 本轮变更记录（对应 §6）：新增手机竖屏（`≤760px`）纵向浏览方案；桌面 / 平板 / 手机横屏的现有适配**零改动**，已用 5 个桌面基准视口截图逐像素回归。
+> 开发隔离：本轮全部改动只提交在本地分支 `feat/mobile-portrait`，**未推送 `main`**；`.github/workflows/pages.yml` 只在 push `main` 时部署，线上不受影响。
+
+### 7.1 生效范围与代码入口
+
+- 只对 `max-width: 760px` 生效。CSS 全部收在 `styles.css` 末尾「手机端纵向布局（2026-11-17）」媒体查询内；JS 统一用 `mobileLayoutQuery = matchMedia("(max-width: 760px)")` / `isMobileLayout()` 判断，**与 CSS 阈值必须保持一致**。
+- 本次同步升版：`index.html` 的 `styles.css?v=20261117m1`、`script.js?v=20261117m1`。
+- 新增 DOM：`index.html` 的 `.viewer-screen` 内 `<div class="mobile-gallery" data-mobile-gallery>`，桌面端 `display:none` 且清空内容，只有手机预览会填充。
+- 主要 JS 入口：`isMobileLayout()`、`renderMobileGallery()`、`galleryPageMarkup()`、`syncGalleryIndex()`、`openGalleryVideo()`；桌面路径（`renderViewer()` 的缩略图 + `showSlide`、`startViewerEntry/Exit` 的 FLIP、横向流引擎）全部原样保留。
+
+### 7.2 首页：隐藏简历信息 + 纵向作品列表
+
+- 手机端隐藏 `.home-profile` 整块（「简历 & 个人作品集」+ 头像 + 姓名 + 学历/职位），首屏只保留 `Project Design / Portfolio 2016~2026` 标题；联系方式仍从右上角「关于我」进入。
+- 首页从「单屏 + 横向阻尼流」改为**原生纵向滚动页**：`.home-screen{overflow-y:auto}`、`.work-stream` 改为 block、`.experience-group` 改为块级（信息头在上、封面列表在下）、`.group-projects` 改为单列 grid、封面卡全宽 `aspect-ratio:4/5`、间距 14px；进度条隐藏，页脚回到文档流末尾（含 `env(safe-area-inset-bottom)` 留白）。
+- 封面继续走 `assets/thumbs/*.crop0.8.*` 竖版裁切；`updateCoverSizes()` 的竖卡判定从 `< 0.8` 放宽到 `< 0.81`，因为 4:5 正好等于 0.8（其它卡片比例不受影响）。
+- 横向流引擎在手机上整体关闭：`measureStream / applyStream / streamFrame / runStream` 早退，滚轮、拖拽、`pointerover`、`armStreamHover`、键盘左右键、`revealStreamCard` 全部被 `isMobileLayout()` 拦截；CSS 兜底 `transform:none !important`，`:focus-visible` 不再展开。
+- 首页滚动位置在离开时记入 `homeScrollMemory`，返回首页时恢复（与桌面保留横向偏移的行为一致）。
+
+### 7.3 作品预览：连续纵向大图平铺（无缩略图）
+
+- 手机端 `renderViewer()` 不渲染单帧 + 缩略图，改走 `renderMobileGallery()`：每页一个 16:9 全宽 `<figure class="gallery-page">` 从上到下平铺、间距 12px；缩略图条、舞台、全屏按钮、末页「其他项目」浮层全部隐藏。
+- 页类型处理：
+  - 普通图片页：全宽铺图，`srcset` 全变体 + `sizes="100vw"` + `loading="lazy"`，手机 3x 自动选 `w1280`；
+  - 复合页（`type:"composite"`）：用预合成预览图，视频框变成播放热区，点击弹出原生全屏播放器（`.gallery-video-modal`，Autoplay+controls，Esc / 点遮罩 / × 关闭并销毁 `video`），适合手机小框；
+  - 叠层页（`type:"stack"`）：状态按纵向展开为多张 16:9 图层（`.gallery-layer`），左上角标 `STATE n / m`，页码仍按项目页数计、不按状态数膨胀；
+  - 页面链接热区（产品地址 / TEL / E-MAIL）按原百分比叠在页面上，手机直接可点。
+- 页码：滚动时以「页面顶边越过视口顶部 26px」的页为当前页（`syncGalleryIndex()`），更新页头 `01/25`；列表末尾直接取最后一页；页码变化时上报 `viewer_slide`（`source=scroll`）。项目打开时为 `01`（不做居中探测，避免一上来就显示 02）。
+- 进入 / 退出：手机不做卡片→大图的 660ms FLIP（`startViewerEntry/startViewerExit` 在手机上返回），改用屏幕淡入淡出；返回首页恢复之前滚动位置；从项目页进入的预览仍走 `history.back()` 回到项目页。
+- 封底之后追加 `.gallery-other` 两列「其他项目」卡片，点击直接切换项目（无克隆层过渡）。
+- 横竖屏 / 跨断点：resize 时若布局模式变化，`renderViewer()` 重建 —— 桌面→手机回到对应页、手机→桌面用 `showSlide(state.slideIndex)`；`sizeArtworkFrame()` 在手机 gallery 模式下直接返回。
+
+### 7.4 验收与回归
+
+- 手机（390×844 / 375×812 / 360×800 / 320×568 / 414×896 / 430×932）：无横向溢出（`document.body.scrollWidth === innerWidth`）、无 404、无 JS 报错；首页 6 张封面按 4:5 平铺，页码/文案不互压；预览连续平铺、页码 01→25 正确、视频页可播放、叠层页状态齐全、热区可点；返回首页滚动位置恢复；旋转与跨断点重建正常。
+- 桌面回归：1920×1080 / 1440×900 / 1280×800 / 1024×768 / 768×1024 与改动前逐像素对比，除 1px 渐变分隔线的亚像素噪点外完全一致。
+- 手机横屏（844×390）仍走原 `max-height:520` 紧凑横屏布局（横向流 + 单帧预览 + 缩略图），与旧版一致。
+
+### 7.5 已知限制
+
+- 手机端不再有卡片→大图共享元素动画、640ms 页间翻页动效与缩略图导航，改为原生滚动体验。
+- 叠层页在手机上以「多状态纵向平铺」呈现，而非原位的原位渐隐；页码按项目页数计。
+- 视频页在手机上不再页面内静音自动播放，改为点击后在原生全屏播放器播放（带声音，符合移动端自动播放策略）。
+- 长列表仅靠 `loading=lazy` 控制加载，未引入虚拟列表；超长项目在低端机上仍需关注滚动性能。

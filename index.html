@@ -145,7 +145,7 @@
     });
   })();
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261117h">
+  <link rel="stylesheet" href="styles.css?v=20261117m1">
   <noscript><style>html.is-booting [data-screen] { visibility: visible; }</style></noscript>
 </head>
 <body>
@@ -386,6 +386,11 @@
           <div class="thumbnail-label"><span>PROJECT PAGES</span><small>滚动或点击缩略图浏览</small></div>
           <div class="thumbnail-rail" data-thumbnail-rail role="listbox" aria-orientation="vertical" aria-label="作品页面导航"></div>
         </div>
+
+        <!-- Mobile portrait only (≤760px): every page is tiled as a large
+             16:9 image from top to bottom in one native scroll container, with
+             no thumbnail rail. Desktop keeps the single-frame viewer above. -->
+        <div class="mobile-gallery" data-mobile-gallery aria-label="作品页面列表"></div>
       </section>
     </main>
   </div>
@@ -393,6 +398,6 @@
 
   <noscript>请启用 JavaScript 以浏览交互式作品集。</noscript>
   <script src="analytics.js?v=20261116q" defer></script>
-  <script src="script.js?v=20261116z15" defer></script>
+  <script src="script.js?v=20261117m1" defer></script>
 </body>
 </html>

@@ -1006,3 +1006,265 @@ img, video {
   -webkit-touch-callout: none;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   手机端纵向布局（2026-11-17，仅 ≤760px）
+
+   桌面 / 平板 / 手机横屏完全沿用上面的原有规则，这一节只覆盖手机竖屏：
+   1) 首页隐藏简历 & 个人信息块，改成正常的纵向滚动页面；
+   2) 横向阻尼作品流改成纵向列表（每段经历一组，封面全宽 4:5 平铺）；
+   3) 作品预览改成连续纵向大图平铺，不再有缩略图条。
+
+   JS 侧对应：script.js 的 isMobileLayout() / mobileLayoutQuery；横向流引擎
+   （阻尼 transform、拖拽、hover 手风琴）在手机上整体关闭。
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  /* ── 1. 首页：从单屏横向改为纵向滚动 ─────────────────────────────── */
+  .home-screen {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .home-heading {
+    height: auto;
+    min-height: 0;
+    padding: 18px 20px 10px;
+    justify-content: flex-start;
+  }
+  .home-heading-main { gap: 0; }
+  .home-heading h1 { margin: 0; }
+  /* 简历 / 个人信息块整块隐藏（顶部「关于我」入口仍在） */
+  .home-profile { display: none; }
+
+  .work-stream-shell {
+    height: auto;
+    overflow: visible;
+    padding: 6px 20px 0;
+    cursor: default;
+    touch-action: auto;
+    -webkit-user-select: auto;
+    user-select: auto;
+    overscroll-behavior: auto;
+  }
+  .work-stream-shell.is-dragging { cursor: default; }
+  .work-stream {
+    display: block;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    transform: none !important;
+    will-change: auto;
+  }
+
+  /* 每段经历 = 信息头 + 纵向封面列表（DOM 里本来就是信息在前） */
+  .experience-group {
+    display: block;
+    padding: 10px 0 0;
+    border-left: 0;
+  }
+  .experience-group:first-child { padding-top: 0; }
+  .experience-group + .experience-group {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(255, 255, 255, .07);
+  }
+  .experience-group:last-child { padding-right: 0; }
+  .experience-group:not(:first-child)::before { display: none; }
+
+  .group-meta {
+    margin: 0 0 14px;
+    max-width: none;
+    gap: 10px;
+  }
+  .group-copy { gap: 1px; padding-right: 2px; }
+  .group-copy strong, .group-copy small { font-size: 10.5px; }
+  .group-divider { height: 28px; }
+
+  .group-projects {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    width: auto;
+    gap: 14px;
+  }
+  /* 全宽 4:5 封面：与 assets/thumbs/*.crop0.8.* 裁切比例一致，不被二次裁切 */
+  .stream-project {
+    flex: none;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    aspect-ratio: 4 / 5;
+    animation: none;
+  }
+  .stream-project-info { top: 18px; left: 18px; right: 18px; gap: 5px; }
+  .stream-project-info b { font-size: 15px; line-height: 1.25; }
+  .stream-project-info small { font-size: 8.5px; }
+  .stream-project-top { left: 18px; right: 18px; bottom: 16px; }
+  .stream-project-top i, .stream-project-top em { font-size: 8.5px; }
+  .stream-project::after { opacity: .82; }
+  .stream-project.is-pending::before { top: 56px; left: 18px; }
+  .stream-progress { display: none; }
+
+  /* 页脚回到文档流末尾，不再绝对定位在首屏底部 */
+  .home-footer {
+    position: static;
+    inset: auto;
+    margin: 30px 20px 0;
+    padding: 14px 0 calc(22px + env(safe-area-inset-bottom));
+    color: #79838f;
+  }
+  .home-footer span:nth-child(2) { display: none; }
+
+  /* ── 3. 预览：连续纵向大图平铺（无缩略图） ───────────────────────── */
+  .viewer-screen.is-mobile-gallery { grid-template-columns: minmax(0, 1fr); }
+  .viewer-screen.is-mobile-gallery .viewer-stage,
+  .viewer-screen.is-mobile-gallery .thumbnail-dock,
+  .viewer-screen.is-mobile-gallery .fullscreen-count,
+  .viewer-screen.is-mobile-gallery .other-projects { display: none !important; }
+  .viewer-screen.is-mobile-gallery .mobile-gallery {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 10px calc(26px + env(safe-area-inset-bottom));
+    background: var(--viewer-bg, #111214);
+  }
+  .viewer-screen.is-mobile-gallery .mobile-gallery::-webkit-scrollbar { width: 0; height: 0; }
+  .viewer-screen.is-mobile-gallery .mobile-gallery { scrollbar-width: none; }
+}
+
+/* Mobile tiled gallery elements (only ever rendered on phones). */
+.mobile-gallery { display: none; }
+.gallery-page {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 0 0 12px;
+  overflow: hidden;
+  background: #151b22;
+  container-type: inline-size;
+}
+.gallery-page:last-child { margin-bottom: 0; }
+.gallery-page.is-stack { aspect-ratio: auto; display: grid; gap: 10px; overflow: visible; background: transparent; }
+.gallery-layer {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #151b22;
+}
+.gallery-state-label {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  left: 8px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  color: rgba(255, 255, 255, .78);
+  background: rgba(8, 10, 14, .62);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-size: 8px;
+  letter-spacing: .08em;
+  pointer-events: none;
+}
+.gallery-image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gallery-overlay-image {
+  position: absolute;
+  display: block;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+}
+.gallery-video-hit {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: calc(1cqw * var(--gallery-radius, 0));
+  background: radial-gradient(62% 62% at 50% 50%, rgba(8, 9, 12, .32), rgba(8, 9, 12, .1));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.gallery-video-hit:active { background: radial-gradient(62% 62% at 50% 50%, rgba(8, 9, 12, .44), rgba(8, 9, 12, .16)); }
+.gallery-video-hit .media-play-icon { width: min(46%, 40px); }
+.gallery-other {
+  margin-top: 26px;
+  padding: 18px 2px 6px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+.gallery-other > p {
+  margin: 0 0 12px;
+  color: #8a929e;
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.gallery-other-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
+.gallery-other-item { padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.gallery-other-item img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; opacity: .85; }
+.gallery-other-item b { display: block; margin-top: 6px; color: #d6dade; font-size: 11px; font-weight: 500; line-height: 1.35; }
+.gallery-other-item em { display: block; margin-top: 2px; color: #7d8794; font-size: 9px; font-style: normal; line-height: 1.35; }
+
+/* Fullscreen video player opened from a tiled page (native controls, so the
+   tiny in-page recording box does not need the site-owned control bar). */
+.gallery-video-modal {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(4, 6, 9, .94);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.gallery-video-modal video { max-width: 100%; max-height: 86vh; border-radius: 6px; background: #000; }
+.gallery-video-close {
+  position: absolute;
+  top: calc(14px + env(safe-area-inset-top));
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(12, 14, 18, .72);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  /* The phone list has no horizontal accordion: a keyboard-focused card must
+     keep its full-width slot instead of growing to the desktop 16:9 width. */
+  .stream-project.is-expanded,
+  .stream-project:focus-visible,
+  .group-projects:has(.stream-project.is-returning) .stream-project {
+    width: 100% !important;
+    flex: none !important;
+    box-shadow: none;
+  }
+  .group-projects:has(.stream-project.is-returning) { width: auto !important; }
+  .group-meta { flex-wrap: wrap; }
+}
+
+/* gallery offsetTop is measured against this scroll container */
+.viewer-screen.is-mobile-gallery .mobile-gallery { position: relative; }

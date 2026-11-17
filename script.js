@@ -37,6 +37,14 @@ const currentViewportMode = () => {
   if (width <= 1100) return "tablet";
   return "desktop";
 };
+
+/* Mobile portrait layout switch (2026-11-17). Everything scoped to ≤760px:
+   the home page becomes a vertically scrolling list and the viewer becomes a
+   top-to-bottom tiled gallery. Desktop / tablet / phone-landscape keep the
+   original horizontal stream + single-frame viewer untouched. The CSS media
+   query and this matchMedia must stay on the same 760px threshold. */
+const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
+const isMobileLayout = () => mobileLayoutQuery.matches;
 analytics?.pageView?.();
 
 const jdSlides = Array.from({ length: 37 }, (_, index) => {
@@ -132,7 +140,9 @@ function updateCoverSizes(root) {
       return;
     }
     const aspect = rect.width / rect.height;
-    if (aspect < 0.8) {
+    // 0.8 covers the phone list cards (a 4:5 cover is exactly 0.8). Their
+    // portrait srcset is the crop0.8 set, so no extra cropping happens.
+    if (aspect < 0.81) {
       const sizes = `${Math.max(1, Math.ceil(rect.height * 0.8))}px`;
       if (img.dataset.coverMode !== "portrait") {
         img.dataset.coverMode = "portrait";
@@ -671,8 +681,13 @@ const elements = {
   otherProjects: document.querySelector("[data-other-projects]"),
   streamShell: document.querySelector("[data-stream-shell]"),
   streamProgress: document.querySelector("[data-stream-progress]"),
-  viewerBackLabel: document.querySelector("[data-viewer-back-label]")
+  viewerBackLabel: document.querySelector("[data-viewer-back-label]"),
+  mobileGallery: document.querySelector("[data-mobile-gallery]")
 };
+
+/* The home page scrolls natively on phones; remember where the visitor was so
+   returning from a project preview lands back on the same card. */
+let homeScrollMemory = 0;
 
 const currentExperience = () => experiences[state.experienceId];
 
@@ -832,6 +847,8 @@ document.addEventListener("fullscreenchange", () => {
 // viewer only the big image area is a page-turn target, not the empty stage.
 function viewerPageTarget(event) {
   if (state.screen !== "viewer") return false;
+  // the phone gallery scrolls natively; a tap must never turn a page
+  if (elements.viewerScreen.classList.contains("is-mobile-gallery")) return false;
   if (!event.target.closest?.("[data-artwork-frame]")) return false;
   return !event.target.closest("a, button, video, audio, .artwork-toolbar, .slide-canvas, .other-projects");
 }
@@ -910,6 +927,8 @@ function sizeArtworkFrame() {
   const stage = elements.viewerStage;
   const frame = elements.artworkFrame;
   if (!stage || !frame) return;
+  // the phone gallery is a flow layout with no single frame to size
+  if (elements.viewerScreen.classList.contains("is-mobile-gallery")) return;
   const style = window.getComputedStyle(stage);
   const padTop = parseFloat(style.paddingTop);
   const padBottom = parseFloat(style.paddingBottom);
@@ -1559,7 +1578,7 @@ function openOtherProject(experienceId, projectId, card) {
     pushRoute(`#project/${experienceId}/${projectId}`);
   };
   clearViewerExit();
-  if (!(card instanceof Element) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (isMobileLayout() || !(card instanceof Element) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     commit();
     return;
   }
@@ -1567,6 +1586,196 @@ function openOtherProject(experienceId, projectId, card) {
   commit();
   runViewerEntry();
 }
+
+/* ── Mobile tiled viewer (≤760px) ───────────────────────────────────────
+   On phones the single-frame viewer is replaced by one native scroll column:
+   every page is a large 16:9 image, tiled from top to bottom, with no thumbnail
+   rail. Composite pages keep their video boxes as tap-to-play hotspots (the
+   recording opens in a native fullscreen player); merged "stack" pages unroll
+   their layers one below the other so the build-up is still readable; page
+   links (product URL / TEL / E-MAIL) keep working. Desktop never reaches this
+   path — it keeps the existing artwork frame + 640ms page turns.
+   ──────────────────────────────────────────────────────────────────────── */
+const GALLERY_FALLBACK_WIDTH = 1280;
+const escAttr = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+function galleryImgMarkup(visual, alt, cls = "gallery-image") {
+  const base = slideSource(visual);
+  if (!base) return "";
+  const variants = visual?.variants;
+  if (!variants?.length) {
+    return `<img class="${cls}" src="${escAttr(base)}" alt="${escAttr(alt)}" loading="lazy" decoding="async" draggable="false">`;
+  }
+  const srcset = variants.map((variant) => `${variant.src} ${variant.width}w`).join(", ");
+  const fallback = (variants.find((variant) => variant.width === GALLERY_FALLBACK_WIDTH) || variants[variants.length - 1]).src;
+  return `<img class="${cls}" src="${escAttr(fallback)}" srcset="${escAttr(srcset)}" sizes="100vw" alt="${escAttr(alt)}" loading="lazy" decoding="async" draggable="false">`;
+}
+
+function galleryLinksMarkup(slide) {
+  return (slide?.links || []).map((link) => `
+    <a class="artwork-link" href="${escAttr(link.href)}" target="_blank" rel="noopener noreferrer"
+       title="${escAttr(link.label || link.href)}" aria-label="${escAttr(link.label || link.href)}"
+       style="left:${link.x}%;top:${link.y}%;width:${link.w}%;height:${link.h}%"></a>`).join("");
+}
+
+function galleryPageMarkup(slide, index, alt) {
+  if (isStack(slide)) {
+    const layers = slide.layers || [];
+    const items = layers.map((layer, layerIndex) => `
+      <div class="gallery-layer">
+        ${galleryImgMarkup(layer, `${alt} · 状态 ${layerIndex + 1}`)}
+        <span class="gallery-state-label">STATE ${layerIndex + 1} / ${layers.length}</span>
+      </div>`).join("");
+    return `<figure class="gallery-page is-stack" data-gallery-page="${index}">${items}</figure>`;
+  }
+  if (isComposite(slide)) {
+    const overlays = (slide.overlays || []).map((overlay) => {
+      const box = overlay?.box;
+      if (!box) return "";
+      if (overlay.kind === "image") {
+        const fit = overlay.fit === "cover" ? "cover" : "contain";
+        return `<img class="gallery-overlay-image" src="${escAttr(overlay.src || "")}" alt="${escAttr(overlay.alt || overlay.label || "")}"
+          loading="lazy" decoding="async" draggable="false"
+          style="left:${box.x}%;top:${box.y}%;width:${box.w}%;height:${box.h}%;object-fit:${fit};z-index:${overlay.z ?? 1};opacity:${overlay.opacity ?? 1}">`;
+      }
+      if (overlay.kind !== "video") return "";
+      return `<button class="gallery-video-hit" type="button" aria-label="播放视频：${escAttr(overlay.label || "页面演示")}"
+        style="left:${box.x}%;top:${box.y}%;width:${box.w}%;height:${box.h}%;--gallery-radius:${overlay.radius ?? 0}"
+        data-gallery-video="${escAttr(overlay.src || "")}"
+        data-video-poster="${escAttr(overlay.poster || "")}"
+        data-video-label="${escAttr(overlay.label || "")}">
+        <span class="media-play-icon" aria-hidden="true">${MEDIA_ICON.play}</span>
+      </button>`;
+    }).join("");
+    return `<figure class="gallery-page" data-gallery-page="${index}">${galleryImgMarkup(slide, alt)}${overlays}${galleryLinksMarkup(slide)}</figure>`;
+  }
+  return `<figure class="gallery-page" data-gallery-page="${index}">${galleryImgMarkup(slide, alt)}${galleryLinksMarkup(slide)}</figure>`;
+}
+
+function galleryOtherMarkup() {
+  const items = otherProjectItems();
+  if (!items.length) return "";
+  const cards = items.map(({ experience, project }) => `
+    <button class="gallery-other-item" type="button" data-other-project="${project.id}" data-other-experience="${experience.id}" aria-label="查看 ${escAttr(project.name)}">
+      <img src="${coverBase(project.cover)}.w640.webp" alt="" loading="lazy" decoding="async" draggable="false">
+      <b>${escAttr(project.name)}</b>
+      <em>${escAttr(experience.company)} · ${escAttr(experience.period)}</em>
+    </button>`).join("");
+  return `<section class="gallery-other" aria-label="其他项目"><p>其他项目</p><div class="gallery-other-list">${cards}</div></section>`;
+}
+
+let galleryScrollRaf = 0;
+
+function syncGalleryIndex() {
+  const gallery = elements.mobileGallery;
+  const project = currentProject();
+  if (!gallery || !project?.slides?.length || state.screen !== "viewer") return;
+  const pages = gallery.querySelectorAll(".gallery-page");
+  if (!pages.length) return;
+  const rect = gallery.getBoundingClientRect();
+  // "current" = the page at the top edge of the gallery: the counter advances
+  // when the next page reaches the top, which matches the tiled scrolling feel
+  // and reads 01 as soon as the project opens (a centre probe would already
+  // report 02 because ~3.7 pages are visible at once). The +1px tolerance keeps
+  // fractional page heights from leaving the counter one page behind.
+  const probe = rect.top + 26;
+  const maxScroll = gallery.scrollHeight - gallery.clientHeight;
+  const atEnd = maxScroll > 0 && gallery.scrollTop >= maxScroll - 2;
+  let current = atEnd ? pages.length - 1 : 0;
+  if (!atEnd) {
+    pages.forEach((page, index) => {
+      if (page.getBoundingClientRect().top <= probe + 1) current = index;
+    });
+  }
+  if (current === state.slideIndex) return;
+  state.slideIndex = current;
+  elements.currentCount.textContent = pad(current + 1);
+  elements.fullscreenCurrent.textContent = pad(current + 1);
+  trackViewerSlide(project.slides[current], "scroll");
+}
+
+function renderMobileGallery(project) {
+  const gallery = elements.mobileGallery;
+  if (!gallery) return;
+  const slides = project.slides || [];
+  gallery.innerHTML = slides
+    .map((slide, index) => galleryPageMarkup(slide, index, slide.alt || `${project.name} 第 ${index + 1} 页`))
+    .join("") + galleryOtherMarkup();
+  elements.totalCount.textContent = pad(slides.length);
+  elements.fullscreenTotal.textContent = pad(slides.length);
+  const startIndex = Math.max(0, Math.min(state.slideIndex, slides.length - 1));
+  elements.currentCount.textContent = pad(startIndex + 1);
+  elements.fullscreenCurrent.textContent = pad(startIndex + 1);
+  if (startIndex > 0) {
+    const target = gallery.querySelector(`[data-gallery-page="${startIndex}"]`);
+    gallery.scrollTop = target ? target.offsetTop - 10 : 0;
+  } else {
+    gallery.scrollTop = 0;
+    if (slides[0]) trackViewerSlide(slides[0], "initial");
+  }
+}
+
+/* Native fullscreen player for a composite page's recording: the in-page phone
+   frame is only ~80px wide on a phone, so its own controls would be unusable. */
+function openGalleryVideo(src, poster, label) {
+  if (!src) return;
+  document.querySelector(".gallery-video-modal")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "gallery-video-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-label", label || "视频演示");
+  const video = document.createElement("video");
+  video.controls = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  video.preload = "auto";
+  if (poster) video.poster = poster;
+  video.src = src;
+  const close = document.createElement("button");
+  close.className = "gallery-video-close";
+  close.type = "button";
+  close.setAttribute("aria-label", "关闭视频");
+  close.textContent = "×";
+  modal.append(video, close);
+  document.body.append(modal);
+  const cleanup = () => {
+    document.removeEventListener("keydown", onKey, true);
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    modal.remove();
+  };
+  const onKey = (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    cleanup();
+  };
+  document.addEventListener("keydown", onKey, true);
+  close.addEventListener("click", cleanup);
+  modal.addEventListener("click", (event) => { if (event.target === modal) cleanup(); });
+  const started = video.play();
+  if (started?.catch) started.catch(() => {});
+}
+
+elements.mobileGallery?.addEventListener("scroll", () => {
+  if (!elements.viewerScreen.classList.contains("is-mobile-gallery")) return;
+  if (galleryScrollRaf) return;
+  galleryScrollRaf = window.requestAnimationFrame(() => {
+    galleryScrollRaf = 0;
+    syncGalleryIndex();
+  });
+}, { passive: true });
+
+elements.mobileGallery?.addEventListener("click", (event) => {
+  const hit = event.target.closest?.("[data-gallery-video]");
+  if (!hit) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openGalleryVideo(hit.dataset.galleryVideo, hit.dataset.videoPoster, hit.dataset.videoLabel);
+});
 
 function renderViewer() {
   const experience = currentExperience();
@@ -1582,6 +1791,14 @@ function renderViewer() {
   window.clearTimeout(panelAdjustTimer);
   elements.viewerScreen.style.setProperty("--stack-shift", "0px");
   renderOtherProjects();
+  const mobileGallery = isMobileLayout();
+  elements.viewerScreen.classList.toggle("is-mobile-gallery", mobileGallery);
+  if (mobileGallery) {
+    elements.thumbnailRail.innerHTML = "";
+    renderMobileGallery(project);
+    return;
+  }
+  elements.mobileGallery.textContent = "";
   elements.thumbnailRail.innerHTML = project.slides.map((slide, index) => {
     const videoCount = slideVideoCount(slide);
     const badge = videoCount ? `<i class="thumbnail-play" aria-hidden="true">▶${videoCount > 1 ? videoCount : ""}</i>` : "";
@@ -2508,6 +2725,10 @@ function focusScreenHeading(screenName) {
 function setActiveScreen(screenName) {
   const changed = state.screen !== screenName;
   const previousScreen = state.screen;
+  if (changed && previousScreen === "home") {
+    // the phone home scrolls natively; keep the position for the way back
+    homeScrollMemory = elements.homeScreen.scrollTop;
+  }
   if (changed) {
     if (previousScreen === "viewer") endViewerSession(viewerExitReason || "navigate");
     if (previousScreen === "home") endHomeEngagement();
@@ -2556,6 +2777,15 @@ function setActiveScreen(screenName) {
       else window.setTimeout(() => { if (!screen.classList.contains("is-active")) screen.hidden = true; }, 430);
     }
   });
+  // Returning to the phone home restores the scroll position saved above
+  // (desktop keeps its horizontal offset, so this keeps the two in parity).
+  if (changed && screenName === "home") {
+    const savedScroll = homeScrollMemory;
+    window.requestAnimationFrame(() => {
+      if (state.screen === "home") elements.homeScreen.scrollTop = savedScroll;
+    });
+    scheduleImpressionCheck(280);
+  }
   // Cards rendered while their screen was hidden have no measurable box yet;
   // set the exact cover `sizes` once the layout is real.
   window.requestAnimationFrame(() => {
@@ -2605,6 +2835,8 @@ function startViewerExit() {
   if (viewerExit) return true;
   if (state.screen !== "viewer" || isViewerFullscreen()) return false;
   if (state.viewerOrigin === "projects") return false;
+  // no reverse FLIP on phones: the gallery leaves through the normal screen fade
+  if (isMobileLayout()) return false;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
   const experienceId = state.experienceId;
   const projectId = state.projectId;
@@ -2774,6 +3006,9 @@ function clearViewerEntry() {
    overlay dissolves into the first page while the viewer chrome settles. */
 function startViewerEntry(card, project, options = {}) {
   if (!(card instanceof Element)) return;
+  // phones open the project straight into the tiled gallery (screen transition
+  // only); the card-to-frame FLIP belongs to the desktop single-frame viewer
+  if (isMobileLayout()) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   clearViewerExit();
@@ -2884,6 +3119,12 @@ function openHomeProject(experienceId, projectId, card) {
     return;
   }
   state.experienceId = experienceId;
+  // Phones skip the shared-element FLIP: openProject renders the tiled gallery
+  // and the normal screen transition carries the change.
+  if (isMobileLayout()) {
+    openProject(projectId, true, "home");
+    return;
+  }
   startViewerEntry(card, project);
   openProject(projectId, true, "home");
   runViewerEntry();
@@ -2946,15 +3187,28 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (contactCard.classList.contains("is-open")) return;
-  if (state.screen === "home") {
+  if (state.screen === "home" && !isMobileLayout()) {
     if (event.key === "ArrowRight" || event.key === "PageDown") nudgeStream(1);
     if (event.key === "ArrowLeft" || event.key === "PageUp") nudgeStream(-1);
     if (event.key === "Home") jumpStream(0);
     if (event.key === "End") jumpStream(1);
   }
   if (state.screen === "viewer") {
-    if (event.key === "ArrowDown" || event.key === "PageDown") navigateViewer(1, "keyboard");
-    if (event.key === "ArrowUp" || event.key === "PageUp") navigateViewer(-1, "keyboard");
+    const galleryMode = elements.viewerScreen.classList.contains("is-mobile-gallery");
+    if (galleryMode) {
+      // phones scroll the tiled gallery natively; keep keyboard browsing working
+      const step = (elements.mobileGallery?.clientHeight || window.innerHeight) * 0.8;
+      const direction = (event.key === "ArrowDown" || event.key === "PageDown") ? 1
+        : (event.key === "ArrowUp" || event.key === "PageUp") ? -1 : 0;
+      if (direction && elements.mobileGallery) {
+        event.preventDefault();
+        elements.mobileGallery.scrollBy({ top: step * direction, behavior: "smooth" });
+        return;
+      }
+    } else {
+      if (event.key === "ArrowDown" || event.key === "PageDown") navigateViewer(1, "keyboard");
+      if (event.key === "ArrowUp" || event.key === "PageUp") navigateViewer(-1, "keyboard");
+    }
     if (event.key === "Escape") {
       if (isViewerFullscreen()) {
         beginFullscreenMorph();
@@ -2991,6 +3245,7 @@ let viewerWheelLastAt = 0;
 let viewerWheelTurnAt = 0;
 viewerElement.addEventListener("wheel", (event) => {
   if (state.screen !== "viewer") return;
+  if (elements.viewerScreen.classList.contains("is-mobile-gallery")) return; // native scroll
   if (event.ctrlKey || event.metaKey) return;
   if (event.target.closest(".thumbnail-rail") || event.target.closest(".other-projects")) return;
   event.preventDefault();
@@ -3082,6 +3337,14 @@ function measureStreamAccordion() {
 }
 
 function measureStream() {
+  // Phones use the vertical CSS layout; there is no horizontal offset to measure.
+  if (isMobileLayout()) {
+    stream.cards = [];
+    stream.max = 0;
+    stream.dirty = false;
+    elements.timeline.style.transform = "";
+    return;
+  }
   measureStreamAccordion();
   const shell = elements.streamShell;
   if (!shell.offsetWidth) {
@@ -3102,6 +3365,10 @@ function measureStream() {
 }
 
 function applyStream() {
+  if (isMobileLayout()) {
+    elements.timeline.style.transform = "";
+    return;
+  }
   // Snap the track to whole device pixels. A fractional translate makes the
   // compositor resample the whole row every frame, so the 1px seams between
   // cover cards shimmer while the row animates (worst during the hover
@@ -3163,6 +3430,12 @@ function trackAccordion(card) {
 }
 
 function streamFrame(time) {
+  if (isMobileLayout()) {
+    stream.raf = 0;
+    stream.lastFrame = 0;
+    stream.dragging = false;
+    return;
+  }
   if (stream.dirty) measureStream();
   const shell = elements.streamShell;
   if (!stream.lastFrame) stream.lastFrame = time;
@@ -3199,12 +3472,17 @@ function streamFrame(time) {
 }
 
 function runStream() {
+  if (isMobileLayout()) {
+    stream.raf = 0;
+    return;
+  }
   if (stream.raf) return;
   stream.lastFrame = 0;
   stream.raf = requestAnimationFrame(streamFrame);
 }
 
 elements.streamShell.addEventListener("wheel", (event) => {
+  if (isMobileLayout()) return; // phones scroll the home page natively
   if (event.ctrlKey || event.metaKey || state.screen !== "home") return;
   event.preventDefault();
   if (stream.dirty) measureStream();
@@ -3220,6 +3498,7 @@ let streamDrag = null;
 let suppressStreamClick = false;
 
 elements.streamShell.addEventListener("pointerdown", (event) => {
+  if (isMobileLayout()) return; // vertical list: no horizontal drag
   if (event.pointerType === "mouse" && event.button !== 0) return;
   if (stream.dirty) measureStream();
   streamDrag = { id: event.pointerId, x: event.clientX, target: stream.target, moved: false };
@@ -3305,7 +3584,7 @@ window.addEventListener("scroll", () => scheduleImpressionCheck(200), { passive:
 const REVEAL_MARGIN = 48;
 
 function revealStreamCard(card) {
-  if (state.screen !== "home") return;
+  if (state.screen !== "home" || isMobileLayout()) return;
   if (stream.dragging || suppressStreamClick) return;
   if (stream.dirty) measureStream();
   const item = stream.cards.find((entry) => entry.element === card);
@@ -3349,7 +3628,7 @@ const hoverCapable = () => window.matchMedia("(hover: hover) and (pointer: fine)
 
 function armStreamHover(card) {
   window.clearTimeout(streamHoverTimer);
-  if (!hoverCapable()) return;
+  if (isMobileLayout() || !hoverCapable()) return;
   streamHoverTimer = window.setTimeout(() => {
     if (hoveredStreamCard !== card || stream.dragging) return;
     homeEngagement.hovers += 1;
@@ -3377,6 +3656,7 @@ function resetAccordionShift() {
 }
 
 elements.streamShell.addEventListener("pointerover", (event) => {
+  if (isMobileLayout()) return;
   if (event.pointerType !== "mouse" || stream.dragging || !hoverCapable()) return;
   const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
   if (!card || card === hoveredStreamCard) return;
@@ -3392,6 +3672,7 @@ elements.streamShell.addEventListener("pointerover", (event) => {
 });
 
 elements.streamShell.addEventListener("pointerout", (event) => {
+  if (isMobileLayout()) return;
   if (event.pointerType !== "mouse") return;
   const card = event.target instanceof Element ? event.target.closest(".stream-project") : null;
   if (!card) return;
@@ -3436,14 +3717,14 @@ elements.timeline.addEventListener("focusout", (event) => {
 });
 
 function nudgeStream(direction) {
-  if (state.screen !== "home") return;
+  if (state.screen !== "home" || isMobileLayout()) return;
   if (stream.dirty) measureStream();
   stream.target = clampStream(stream.target + direction * stream.viewport * 0.45);
   runStream();
 }
 
 function jumpStream(ratio) {
-  if (state.screen !== "home") return;
+  if (state.screen !== "home" || isMobileLayout()) return;
   if (stream.dirty) measureStream();
   stream.target = clampStream(stream.max * ratio);
   runStream();
@@ -3463,6 +3744,15 @@ window.addEventListener("resize", () => {
   scheduleStreamMeasure(120);
   scheduleImpressionCheck(240);
   updateRailMask();
+  if (state.screen === "viewer") {
+    // Desktop ⇄ phone gallery: rebuild the viewer when the layout mode flips
+    // (renderViewer keeps the current page index for each direction).
+    const galleryMode = elements.viewerScreen.classList.contains("is-mobile-gallery");
+    if (galleryMode !== isMobileLayout()) {
+      renderViewer();
+      return;
+    }
+  }
   sizeArtworkFrame();
   refreshArtworkResolution();
   if (state.screen === "viewer") {
