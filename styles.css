@@ -1027,13 +1027,15 @@ img, video {
     -webkit-overflow-scrolling: touch;
   }
   .home-heading {
+    --home-type: clamp(19px, 5.6vw, 26px);
     height: auto;
     min-height: 0;
-    padding: 18px 20px 10px;
+    padding: 22px 20px 46px;
     justify-content: flex-start;
   }
   .home-heading-main { gap: 0; }
-  .home-heading h1 { margin: 0; }
+  .home-heading h1 { margin: 0; font-size: var(--home-type); }
+  .portfolio-years { font-size: clamp(13px, 4.4vw, 18px); }
   /* 简历 / 个人信息块整块隐藏（顶部「关于我」入口仍在） */
   .home-profile { display: none; }
 
@@ -1086,64 +1088,28 @@ img, video {
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
     width: auto;
-    gap: 14px;
+    gap: 16px;
   }
   /* 全宽 16:9 封面完整铺开、不做左右裁切；项目名/页数移到封面下方，
      避免叠在封面自带的标题上（手机端以「看全封面」为准） */
   .stream-project {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    column-gap: 12px;
-    row-gap: 8px;
+    display: block;
     width: 100%;
     height: auto;
     max-height: none;
-    aspect-ratio: auto;
-    padding: 0 0 18px;
-    overflow: visible;
-    background: transparent;
+    aspect-ratio: 16 / 9;
+    padding: 0;
+    overflow: hidden;
+    background: #151b22;
     animation: none;
   }
-  .stream-project img {
-    flex: 0 0 100%;
-    position: static;
-    inset: auto;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
-    background: #151b22;
-    filter: none;
-  }
+  /* the cover fills the 16:9 card, so the bitmap is shown in full (no crop) */
+  .stream-project img { filter: none; }
   .stream-project::after { display: none; }
-  .stream-project-info {
-    order: 1;
-    flex: 1 1 auto;
-    position: static;
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-    padding: 0;
-  }
-  .stream-project-info b { font-size: 15px; line-height: 1.25; }
-  .stream-project-info small { color: rgba(255, 255, 255, .5); font-size: 8.5px; letter-spacing: .1em; }
-  .stream-project-top {
-    order: 2;
-    flex: 0 0 auto;
-    position: static;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 3px;
-    padding: 2px 0 0;
-    color: rgba(255, 255, 255, .5);
-  }
-  .stream-project-top i, .stream-project-top em { font-size: 8.5px; }
-  /* the caption stays visible even if a keyboard focuses a card */
-  .stream-project.is-expanded .stream-project-info,
-  .stream-project:focus-visible .stream-project-info { opacity: 1; }
-  .stream-project.is-pending::before { position: static; order: 3; margin-top: 4px; }
+  /* 手机端只留封面：项目名 / 页数 / 序号 / 类型全部隐藏，阅读全靠封面本身 */
+  .stream-project-info,
+  .stream-project-top,
+  .stream-project.is-pending::before { display: none; }
   .stream-progress { display: none; }
 
   /* 页脚回到文档流末尾，不再绝对定位在首屏底部 */
