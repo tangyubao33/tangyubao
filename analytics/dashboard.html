@@ -80,8 +80,11 @@
   }
   .notice.error { border-color: #51262b; background: #251214; color: #ffb3b3; }
 
-  .loading { display: grid; place-items: center; min-height: 55vh; color: var(--muted); gap: 12px; }
+  .loading { display: grid; place-items: center; align-content: center; min-height: 55vh; color: var(--muted); gap: 12px; }
   .loading[hidden] { display: none; }
+  .loading-note { font-size: 11.5px; color: var(--dim); max-width: 520px; text-align: center; line-height: 1.6; }
+  .badge.stale::before { background: var(--accent); }
+  .notice .btn { margin-left: 10px; padding: 3px 10px; font-size: 11.5px; }
   .spinner {
     width: 26px; height: 26px; border-radius: 50%;
     border: 2px solid #2a3340; border-top-color: var(--accent);
@@ -294,7 +297,7 @@
   </header>
 
   <div id="notice"></div>
-  <div id="loading" class="loading"><span class="spinner" aria-hidden="true"></span><span>正在读取数据…</span></div>
+  <div id="loading" class="loading"><span class="spinner" aria-hidden="true"></span><span id="loadingText">正在读取数据…</span><span class="loading-note" id="loadingNote"></span></div>
 
   <main id="content" hidden>
     <div class="section-head">
@@ -481,6 +484,8 @@
     days: 30,
     data: null,
     demo: false,
+    cached: false,
+    latency: 0,
     error: "",
     projectKey: "",
     trend: { sessions: true, boot_attempts: false, boot_success: false, home_views: false, impressions: false, card_clicks: true, viewer_opens: true, about_opens: false, resume_downloads: false }
@@ -490,6 +495,8 @@
     sourceBadge: document.getElementById("sourceBadge"),
     notice: document.getElementById("notice"),
     loading: document.getElementById("loading"),
+    loadingText: document.getElementById("loadingText"),
+    loadingNote: document.getElementById("loadingNote"),
     content: document.getElementById("content"),
     kpis: document.getElementById("kpis"),
     bootStats: document.getElementById("bootStats"),
@@ -620,6 +627,76 @@
     els.notice.innerHTML = html ? '<div class="notice' + (isError ? " error" : "") + '">' + html + "</div>" : "";
   }
 
+  /* The summary request crosses the border to workers.dev. On some networks that
+   * connection stalls instead of failing, and this dashboard used to sit on
+   * 「正在读取数据…」 for ever because fetch() had no deadline. Every attempt now
+   * has a hard timeout, the spinner counts how long it has waited, the last good
+   * payload is cached (so the dashboard opens with real numbers and refreshes in
+   * the background), and any failure leaves an explicit error with a retry. */
+  var SUMMARY_TIMEOUT_MS = 12000;
+  var SUMMARY_CACHE_KEY = "pf_dash_summary_v1";
+  var loadingClock = null;
+
+  function retryControl() {
+    return ' <button type="button" class="btn" data-retry="1">重试</button>';
+  }
+
+  function summaryCacheRead(days) {
+    try {
+      var raw = localStorage.getItem(SUMMARY_CACHE_KEY);
+      if (!raw) return null;
+      var pack = JSON.parse(raw);
+      if (!pack || pack.base !== REMOTE_BASE || !pack.entries) return null;
+      var entry = pack.entries[String(days)];
+      if (!entry || !entry.data || !entry.data.current) return null;
+      return entry;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function summaryCacheWrite(days, data) {
+    try {
+      var pack = null;
+      try { pack = JSON.parse(localStorage.getItem(SUMMARY_CACHE_KEY) || "null"); } catch (error) { pack = null; }
+      if (!pack || pack.base !== REMOTE_BASE || !pack.entries) pack = { base: REMOTE_BASE, entries: {} };
+      pack.entries[String(days)] = { saved_at: Date.now(), data: data };
+      // keep the cache small: only the four ranges the toolbar offers
+      Object.keys(pack.entries).forEach(function (key) {
+        if (["7", "14", "30", "90"].indexOf(key) === -1) delete pack.entries[key];
+      });
+      localStorage.setItem(SUMMARY_CACHE_KEY, JSON.stringify(pack));
+    } catch (error) {
+      /* private mode / quota — caching is an optimisation, never a hard dependency */
+    }
+  }
+
+  function resetLoadingMarkup() {
+    els.loading.innerHTML = '<span class="spinner" aria-hidden="true"></span>' +
+      '<span id="loadingText">正在读取数据…</span>' +
+      '<span class="loading-note" id="loadingNote"></span>';
+    els.loadingText = document.getElementById("loadingText");
+    els.loadingNote = document.getElementById("loadingNote");
+  }
+
+  function startLoadingClock() {
+    var started = Date.now();
+    stopLoadingClock();
+    if (els.loadingText) els.loadingText.textContent = "正在读取数据…";
+    if (els.loadingNote) els.loadingNote.textContent = "";
+    loadingClock = setInterval(function () {
+      var seconds = (Date.now() - started) / 1000;
+      if (!els.loadingNote || seconds < 2.5) return;
+      els.loadingNote.textContent = "已等待 " + Math.floor(seconds) + " 秒。数据接口在 workers.dev 上，跨境访问偏慢；" +
+        (SUMMARY_TIMEOUT_MS / 1000) + " 秒没有响应会中止并提示重试。";
+    }, 500);
+  }
+
+  function stopLoadingClock() {
+    if (loadingClock) clearInterval(loadingClock);
+    loadingClock = null;
+  }
+
   function applyDemo(message, isError) {
     if (!window.SAMPLE_SUMMARY) {
       setNotice("没有找到示例数据（analytics/sample-summary.js）。请先运行 <code>node analytics/tools/make-sample.mjs</code>，或给看板加 ?api= 指向 Collector。", true);
@@ -629,7 +706,7 @@
     state.demo = true;
     state.data = window.SAMPLE_SUMMARY;
     state.error = message || "";
-    if (message) setNotice(esc(message) + " 已切换到内置示例数据（合成数据，不是真实访问量）。", Boolean(isError));
+    if (message) setNotice(esc(message) + " 已切换到内置示例数据（合成数据，不是真实访问量）。" + retryControl(), Boolean(isError));
     else setNotice("当前展示的是<strong>内置示例数据</strong>（合成数据，用于演示看板与验证口径）。接入真实的 <code>/api/summary</code> 后这里会显示实时数据。");
     return true;
   }
@@ -660,7 +737,23 @@
     var headers = {};
     var token = authToken();
     if (token) headers.Authorization = "Bearer " + token;
-    var response = await fetch(url, { headers: headers, cache: "no-store" });
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, SUMMARY_TIMEOUT_MS) : null;
+    var response;
+    try {
+      response = await fetch(url, {
+        headers: headers,
+        cache: "no-store",
+        signal: controller ? controller.signal : undefined
+      });
+    } catch (error) {
+      if (error && (error.name === "AbortError" || error.code === 20)) {
+        throw new Error("请求超时（" + Math.round(SUMMARY_TIMEOUT_MS / 1000) + " 秒无响应）");
+      }
+      throw new Error("网络请求失败（" + ((error && error.message) || error) + "）");
+    } finally {
+      clearTimeout(timer);
+    }
     if (response.status === 401 || response.status === 503) {
       if (!retry) {
         var entered = window.prompt("请输入看板访问令牌（Worker 的 DASHBOARD_TOKEN）：", "");
@@ -675,33 +768,7 @@
     return response.json();
   }
 
-  async function load() {
-    els.loading.hidden = false;
-    els.content.hidden = true;
-    els.sourceBadge.className = "badge";
-    els.sourceBadge.textContent = "连接中…";
-
-    // REMOTE_BASE may be "" on purpose (same-origin local collector).
-    var remote = !FORCE_DEMO;
-    if (remote) {
-      try {
-        var data = await fetchRemote(state.days);
-        if (!data || !data.current) throw new Error("数据格式不正确");
-        state.demo = false;
-        state.data = data;
-        state.error = "";
-        setNotice("");
-      } catch (error) {
-        applyDemo("无法连接实时数据源：" + (error.message || error) + "。", true);
-      }
-    } else {
-      applyDemo("");
-    }
-
-    if (!state.data) {
-      els.loading.innerHTML = "<span>没有可展示的数据</span>";
-      return;
-    }
+  function paint() {
     document.querySelectorAll("[data-days]").forEach(function (button) {
       button.disabled = state.demo;
     });
@@ -713,6 +780,67 @@
     els.content.hidden = false;
   }
 
+  var loadSeq = 0;
+  async function load() {
+    var seq = ++loadSeq;
+    var cached = FORCE_DEMO ? null : summaryCacheRead(state.days);
+
+    if (cached) {
+      // Show the last good payload immediately; the refresh runs behind it so a
+      // slow cross-border request never looks like a stuck page.
+      state.demo = false;
+      state.cached = true;
+      state.latency = 0;
+      state.data = cached.data;
+      state.error = "";
+      setNotice("");
+      paint();
+    } else {
+      state.cached = false;
+      els.sourceBadge.className = "badge";
+      els.sourceBadge.textContent = "连接中…";
+      els.content.hidden = true;
+      els.loading.hidden = false;
+      resetLoadingMarkup();
+      startLoadingClock();
+    }
+
+    if (FORCE_DEMO) {
+      stopLoadingClock();
+      if (applyDemo("")) paint();
+      return;
+    }
+
+    var startedAt = Date.now();
+    try {
+      var data = await fetchRemote(state.days);
+      if (seq !== loadSeq) return; // 新的刷新已经开始，丢弃这次迟到的结果
+      if (!data || !data.current) throw new Error("数据格式不正确");
+      state.demo = false;
+      state.cached = false;
+      state.data = data;
+      state.error = "";
+      state.latency = Date.now() - startedAt;
+      summaryCacheWrite(state.days, data);
+      setNotice("");
+      paint();
+    } catch (error) {
+      if (seq !== loadSeq) return; // 同上：只让最新一次刷新决定界面状态
+      var message = "无法连接实时数据源：" + (error.message || error);
+      if (state.data && !state.demo) {
+        // Something usable is already on screen — keep it, say why, offer a retry.
+        els.sourceBadge.className = "badge offline";
+        els.sourceBadge.textContent = "刷新失败";
+        els.loading.hidden = true;
+        setNotice(esc(message) + " 当前展示的是上次成功获取的数据。" + retryControl(), true);
+      } else if (applyDemo(message + "。", true)) {
+        paint();
+      }
+    } finally {
+      if (seq === loadSeq) stopLoadingClock();
+    }
+  }
+
   /* ---------------------------------------------------------------- render */
 
   function render() {
@@ -722,8 +850,14 @@
     var o = current.overview;
     var p = previous.overview || {};
 
-    els.sourceBadge.className = "badge" + (state.demo ? " demo" : "");
-    els.sourceBadge.textContent = state.demo ? "示例数据 · 固定 30 天" : "实时数据 · 最近 " + state.days + " 天";
+    els.sourceBadge.className = "badge" + (state.demo ? " demo" : (state.cached ? " stale" : ""));
+    els.sourceBadge.textContent = state.demo
+      ? "示例数据 · 固定 30 天"
+      : (state.cached
+        ? "缓存数据 · 刷新中…"
+        : "实时数据 · 最近 " + state.days + " 天" + (state.latency
+          ? " · " + (state.latency < 1000 ? Math.round(state.latency) + "ms" : (state.latency / 1000).toFixed(1) + "s")
+          : ""));
 
     var rangeFrom = current.meta.from ? new Date(current.meta.from).toLocaleDateString("zh-CN") : "";
     var rangeTo = current.meta.to ? new Date(current.meta.to).toLocaleDateString("zh-CN") : "";
@@ -767,6 +901,7 @@
     renderInsights(current, previous);
     els.metaLine.textContent = "数据源：" + (state.demo ? "内置示例数据（合成）" : (REMOTE_BASE ? (REMOTE_BASE || location.origin) : "本地 collector")) +
       " · 生成时间：" + new Date(current.meta.generated_at).toLocaleString("zh-CN") +
+      (state.cached ? "（缓存显示，正在后台刷新）" : "") +
       " · 事件 " + fmtNum(current.meta.event_count) + " 条 · 会话 " + fmtNum(current.meta.session_count) + " 个";
     document.title = "数据看板 · " + fmtNum(sessions) + " 会话 · 唐尉保作品集";
   }
@@ -1394,6 +1529,10 @@
   });
   document.getElementById("refreshBtn").addEventListener("click", load);
   document.getElementById("exportBtn").addEventListener("click", exportCsv);
+  // Retry control in an error notice (timeout / network / 401).
+  document.addEventListener("click", function (event) {
+    if (event.target && event.target.closest && event.target.closest("[data-retry]")) load();
+  });
   window.addEventListener("resize", function () {
     if (!state.data) return;
     clearTimeout(window.__dashResize);
