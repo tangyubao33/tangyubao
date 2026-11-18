@@ -333,6 +333,7 @@ npx wrangler@4 secret put DASHBOARD_TOKEN
 | 线上看板一直「示例数据」 | `?api=` 地址是否带协议；Worker 是否部署；控制台是否有 CORS/网络错误；换个网络试 `workers.dev` |
 | 看板一直「正在读取数据…」/ 无限转圈 | 旧版本没有超时会这样，现在最多 12 秒就会报「请求超时」+ 重试。反复超时基本是当前网络到 `workers.dev` 跨境不通：换网络、关掉代理再试，或给 Worker 绑自定义域名（见 §4.3）；也可以用 `?api=` 指向本地 collector |
 | 看板徽标「缓存数据 · 刷新中…」 | 缓存优先：先显示上次成功的结果，后台再请求 `/api/summary`；刷新完成变「实时数据 · 最近 N 天 · 耗时」，失败变红字「刷新失败」但保留旧数据 |
+| 看板报 `Cannot read properties of undefined (reading '…')` | 旧版某块渲染出错会让整页失败。现在每个板块独立渲染，出错只在顶部提示是哪一块（控制台有堆栈），其余照常显示；刷新到最新版即可 |
 | 看板提示需要令牌 / 401 | 在页面顶部红色提示里粘贴 `DASHBOARD_TOKEN` 点「连接」（内联表单，不依赖弹窗）；或用 `#token=...` 打开；确认 `wrangler secret` 已生效（重新 deploy 不必，secret 立即生效） |
 | 以前报 `prompt() is not supported.` | 旧版用浏览器弹窗问令牌，内嵌 webview 不支持；现已改为页面内联输入框，强刷后即可粘贴令牌 |
 | 有访问但没有事件 | 打开站点控制台看 `[analytics]` 日志；确认 meta/`ANALYTICS_ENDPOINT` 已填；DNT 是否开启；`/health` 是否 200 |
