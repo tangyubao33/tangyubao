@@ -211,8 +211,9 @@
   .bars { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
   .bar-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 74px; gap: 10px; align-items: center; font-size: 12px; }
   .bar-row .name { color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bar-row .track { height: 8px; background: #0d1015; border-radius: 4px; overflow: hidden; }
+  .bar-row .track { position: relative; height: 8px; background: #0d1015; border-radius: 4px; overflow: hidden; }
   .bar-row .track i { display: block; height: 100%; border-radius: 4px; background: var(--blue); }
+  .bar-row .track b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--orange); opacity: .9; }
   .bar-row .val { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .stat-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
@@ -433,22 +434,25 @@
       </div>
     </section>
 
-    <div class="section-head"><h2>访问地域</h2><span class="hint">不存原始 IP；仅 Cloudflare 边缘解析出的国家 / 省州 / 城市（按会话去重）</span></div>
+    <div class="section-head"><h2>访问地域</h2><span class="hint">不存原始 IP；国家 / 省州 / 城市按会话去重；经代理 / WARP / VPN 的访问显示为出口节点</span></div>
     <section class="grid two">
       <div class="card">
         <h3>国家 / 地区 · 省州</h3>
-        <p class="card-sub">访客来源分布；IP 仅用于边缘解析，不落库</p>
+        <p class="card-sub">访客来源分布；IP 仅用于边缘解析，不落库；「代理」= 云厂商 / WARP / VPN 出口</p>
         <div id="geoStats" class="stat-list"></div>
         <div class="divider"></div>
         <div id="geoCountries" class="bars"></div>
         <div class="divider"></div>
         <div id="geoRegions" class="bars"></div>
+        <div class="divider"></div>
+        <p class="muted" style="margin:0 0 8px;font-size:11.5px">橙色段 = 疑似代理 / 机房出口（这些会话的「国家 / 城市」只是出口节点所在地）；同一批出口的运营商见下方</p>
+        <div id="geoProxy" class="bars"></div>
       </div>
       <div class="card">
         <h3>城市</h3>
         <p class="card-sub">Top 12 城市；城市精度受 Cloudflare 边缘数据限制</p>
         <div id="geoCities" class="bars"></div>
-        <p class="muted" style="margin:12px 0 0;font-size:11.5px">说明：只保存国家 / 省州 / 城市三个粗粒度字段，不保存 IP、经纬度或精确地址。可在 D1 中按需删除。</p>
+        <p class="muted" style="margin:12px 0 0;font-size:11.5px">说明：只保存国家 / 省州 / 城市三个粗粒度字段（另存出口 ASN / 运营商，用于识别代理），不保存 IP、经纬度或精确地址。地区按「上报时」的出口 IP 判定：挂 WARP / VPN / 代理的访问会记成出口节点所在国家（看板标注「代理」）；切换网络后批量上报的事件也可能记到新出口。可在 D1 中按需删除。</p>
       </div>
     </section>
 
@@ -534,6 +538,7 @@
     geoCountries: document.getElementById("geoCountries"),
     geoRegions: document.getElementById("geoRegions"),
     geoCities: document.getElementById("geoCities"),
+    geoProxy: document.getElementById("geoProxy"),
     deviceStats: document.getElementById("deviceStats"),
     deviceBars: document.getElementById("deviceBars"),
     referrerBars: document.getElementById("referrerBars"),
@@ -612,9 +617,15 @@
       ? items.map(function (item) {
         var width = Math.max(1, ((Number(item.value) || 0) / max) * 100);
         var color = item.color || opts.color || "";
-        return '<div class="bar-row"><span class="name" title="' + esc(item.name) + '">' + esc(item.name) +
+        var proxyValue = Number(item.proxyValue) || 0;
+        var proxyWidth = proxyValue && Number(item.value) ? Math.max(1, (proxyValue / Number(item.value)) * width) : 0;
+        var tip = item.name + "：" + fmtNum(item.value) +
+          (item.display != null ? "（" + item.display + "）" : "") +
+          (proxyValue ? " · 其中疑似代理出口 " + fmtNum(proxyValue) : "");
+        return '<div class="bar-row" title="' + esc(tip) + '"><span class="name" title="' + esc(item.name) + '">' + esc(item.name) +
           '</span><span class="track"><i style="width:' + width.toFixed(1) + "%;" + (color ? "background:" + color : "") +
-          '"></i></span><span class="val">' + esc(item.display != null ? item.display : fmtNum(item.value)) + "</span></div>";
+          '"></i>' + (proxyWidth ? '<b style="width:' + proxyWidth.toFixed(1) + '%"></b>' : "") +
+          '</span><span class="val">' + esc(item.display != null ? item.display : fmtNum(item.value)) + "</span></div>";
       }).join("")
       : '<p class="muted" style="margin:0">暂无数据</p>';
   }
@@ -1317,19 +1328,34 @@
   function renderGeo(current) {
     var geo = current.geo || { samples: 0, countries: [], regions: [], cities: [] };
     var samples = geo.samples || 0;
-    els.geoStats.innerHTML = [
+    var proxySessions = geo.proxy_sessions;
+    // 旧版 Worker 还没有代理字段：不显示代理相关行，也不报错
+    var hasProxyInfo = proxySessions !== undefined;
+    var stats = [
       stat("有地域数据会话", fmtNum(samples), geo.unknown ? "未知 " + fmtNum(geo.unknown) + " 个会话" : "覆盖全部会话"),
       stat("国家 / 地区", fmtNum((geo.countries || []).length), (geo.countries || [])[0] ? "最多：" + countryLabel(geo.countries[0].code) : ""),
       stat("省 / 州", fmtNum((geo.regions || []).length), ""),
       stat("城市", fmtNum((geo.cities || []).length), "")
-    ].join("");
+    ];
+    if (hasProxyInfo) {
+      stats.push(stat("疑似代理出口", fmtNum(proxySessions),
+        samples ? fmtPct((proxySessions / samples) * 100) + " 的会话来自云厂商 / WARP / VPN" : "暂无"));
+    }
+    els.geoStats.innerHTML = stats.join("");
+    // 代理会话用橙色叠加在条形上（hover 有详细数字），不把长文案塞进右侧数值列
     bars(els.geoCountries, (geo.countries || []).slice(0, 12).map(function (item) {
-      return { name: countryLabel(item.code), value: item.sessions, display: fmtNum(item.sessions) + " · " + fmtPct(item.pct) };
+      return {
+        name: countryLabel(item.code),
+        value: item.sessions,
+        proxyValue: item.proxy,
+        display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
+      };
     }), { color: "#6ea8fe" });
     bars(els.geoRegions, (geo.regions || []).slice(0, 12).map(function (item) {
       return {
         name: countryLabel(item.country) + " · " + regionLabel(item.region),
         value: item.sessions,
+        proxyValue: item.proxy,
         display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
       };
     }), { color: "#b58cff" });
@@ -1337,13 +1363,32 @@
       return {
         name: countryLabel(item.country) + " · " + (item.city || regionLabel(item.region)),
         value: item.sessions,
+        proxyValue: item.proxy,
         display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
       };
     }), { color: "#3ddc97" });
+    if (els.geoProxy) {
+      if (hasProxyInfo && (geo.proxy_orgs || []).length) {
+        bars(els.geoProxy, geo.proxy_orgs.slice(0, 8).map(function (item) {
+          return {
+            name: item.name,
+            value: item.sessions,
+            display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
+          };
+        }), { color: "#ffa94d" });
+      } else {
+        els.geoProxy.innerHTML = '<p class="muted" style="margin:0;font-size:11.5px">' +
+          (hasProxyInfo
+            ? "这段时间没有检测到云厂商 / WARP / VPN 出口。"
+            : "Worker 部署 <code>0003_asn</code> 迁移后开始记录出口 ASN；届时 Cloudflare / 云厂商出口会列在这里。") +
+          "</p>";
+      }
+    }
     if (!samples) {
       els.geoCountries.innerHTML = '<p class="muted" style="margin:0">暂无地域数据；Worker 需要部署 0002_geo 迁移后才会写入国家/省州/城市。</p>';
       els.geoRegions.innerHTML = "";
       els.geoCities.innerHTML = "";
+      if (els.geoProxy) els.geoProxy.innerHTML = "";
     }
   }
 

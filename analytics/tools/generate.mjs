@@ -27,22 +27,22 @@ const REFERRERS = [
 ];
 
 const GEOS = [
-  { country: "CN", region: "Beijing", city: "Beijing", continent: "AS", weight: 0.2 },
-  { country: "CN", region: "Shanghai", city: "Shanghai", continent: "AS", weight: 0.17 },
-  { country: "CN", region: "Zhejiang", city: "Hangzhou", continent: "AS", weight: 0.11 },
-  { country: "CN", region: "Guangdong", city: "Shenzhen", continent: "AS", weight: 0.1 },
-  { country: "CN", region: "Jiangsu", city: "Nanjing", continent: "AS", weight: 0.06 },
-  { country: "CN", region: "Sichuan", city: "Chengdu", continent: "AS", weight: 0.04 },
-  { country: "SG", region: "Singapore", city: "Singapore", continent: "AS", weight: 0.06 },
-  { country: "US", region: "California", city: "San Jose", continent: "NA", weight: 0.06 },
-  { country: "US", region: "New York", city: "New York", continent: "NA", weight: 0.03 },
-  { country: "JP", region: "Tokyo", city: "Tokyo", continent: "AS", weight: 0.03 },
-  { country: "GB", region: "England", city: "London", continent: "EU", weight: 0.03 },
-  { country: "CA", region: "Ontario", city: "Toronto", continent: "NA", weight: 0.02 },
-  { country: "AU", region: "New South Wales", city: "Sydney", continent: "OC", weight: 0.02 },
-  { country: "DE", region: "Bavaria", city: "Munich", continent: "EU", weight: 0.02 },
-  { country: "FR", region: "Ile-de-France", city: "Paris", continent: "EU", weight: 0.02 },
-  { country: "HK", region: "Hong Kong", city: "Hong Kong", continent: "AS", weight: 0.03 }
+  { country: "CN", region: "Beijing", city: "Beijing", continent: "AS", asn: 4808, as_org: "China Unicom", weight: 0.2 },
+  { country: "CN", region: "Shanghai", city: "Shanghai", continent: "AS", asn: 4812, as_org: "China Telecom", weight: 0.17 },
+  { country: "CN", region: "Zhejiang", city: "Hangzhou", continent: "AS", asn: 56041, as_org: "China Mobile", weight: 0.11 },
+  { country: "CN", region: "Guangdong", city: "Shenzhen", continent: "AS", asn: 4134, as_org: "Chinanet", weight: 0.1 },
+  { country: "CN", region: "Jiangsu", city: "Nanjing", continent: "AS", asn: 4837, as_org: "China Unicom", weight: 0.06 },
+  { country: "CN", region: "Sichuan", city: "Chengdu", continent: "AS", asn: 9808, as_org: "China Mobile", weight: 0.04 },
+  { country: "SG", region: "Singapore", city: "Singapore", continent: "AS", asn: 13335, as_org: "Cloudflare, Inc.", weight: 0.06 },
+  { country: "US", region: "California", city: "San Jose", continent: "NA", asn: 13335, as_org: "Cloudflare, Inc.", weight: 0.06 },
+  { country: "US", region: "New York", city: "New York", continent: "NA", asn: 14618, as_org: "Amazon.com, Inc.", weight: 0.03 },
+  { country: "JP", region: "Tokyo", city: "Tokyo", continent: "AS", asn: 13335, as_org: "Cloudflare, Inc.", weight: 0.03 },
+  { country: "GB", region: "England", city: "London", continent: "EU", asn: 2856, as_org: "BT", weight: 0.03 },
+  { country: "CA", region: "Ontario", city: "Toronto", continent: "NA", asn: 812, as_org: "Rogers Communications", weight: 0.02 },
+  { country: "AU", region: "New South Wales", city: "Sydney", continent: "OC", asn: 1221, as_org: "Telstra", weight: 0.02 },
+  { country: "DE", region: "Bavaria", city: "Munich", continent: "EU", asn: 3320, as_org: "Deutsche Telekom", weight: 0.02 },
+  { country: "FR", region: "Ile-de-France", city: "Paris", continent: "EU", asn: 3215, as_org: "Orange", weight: 0.02 },
+  { country: "HK", region: "Hong Kong", city: "Hong Kong", continent: "AS", asn: 4760, as_org: "HKT", weight: 0.03 }
 ];
 
 const EXIT_REASONS = ["back", "esc", "brand_home", "route"];
@@ -112,6 +112,8 @@ export function generateSampleEvents(options = {}) {
       region: session.geo ? session.geo.region : "",
       city: session.geo ? session.geo.city : "",
       continent: session.geo ? session.geo.continent : "",
+      asn: session.geo ? session.geo.asn || 0 : 0,
+      as_org: session.geo ? session.geo.as_org || "" : "",
       props: Object.assign({}, props || {})
     });
   };
