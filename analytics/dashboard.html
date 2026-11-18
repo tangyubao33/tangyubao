@@ -1379,7 +1379,9 @@
       } else {
         els.geoProxy.innerHTML = '<p class="muted" style="margin:0;font-size:11.5px">' +
           (hasProxyInfo
-            ? "这段时间没有检测到云厂商 / WARP / VPN 出口。"
+            ? (samples
+              ? "这段时间没有检测到云厂商 / WARP / VPN 出口。注意：<code>0003_asn</code> 迁移前入库的历史事件没有 ASN，不会被标记，代理识别从部署后的新访问开始生效。"
+              : "这段范围还没有地域数据。")
             : "Worker 部署 <code>0003_asn</code> 迁移后开始记录出口 ASN；届时 Cloudflare / 云厂商出口会列在这里。") +
           "</p>";
       }
