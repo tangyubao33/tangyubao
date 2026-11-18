@@ -85,6 +85,13 @@
   .loading-note { font-size: 11.5px; color: var(--dim); max-width: 520px; text-align: center; line-height: 1.6; }
   .badge.stale::before { background: var(--accent); }
   .notice .btn { margin-left: 10px; padding: 3px 10px; font-size: 11.5px; }
+  .token-form { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: 10px; }
+  .token-form input {
+    width: 250px; max-width: 60vw; padding: 5px 10px; border-radius: 9px;
+    border: 1px solid #51262b; background: #1b0f11; color: var(--text);
+    font: inherit; font-size: 12.5px;
+  }
+  .token-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .spinner {
     width: 26px; height: 26px; border-radius: 50%;
     border: 2px solid #2a3340; border-top-color: var(--accent);
@@ -486,6 +493,7 @@
     demo: false,
     cached: false,
     latency: 0,
+    token: "",
     error: "",
     projectKey: "",
     trend: { sessions: true, boot_attempts: false, boot_success: false, home_views: false, impressions: false, card_clicks: true, viewer_opens: true, about_opens: false, resume_downloads: false }
@@ -627,6 +635,23 @@
     els.notice.innerHTML = html ? '<div class="notice' + (isError ? " error" : "") + '">' + html + "</div>" : "";
   }
 
+  // `window.prompt` is missing in some embedded webviews ("prompt() is not
+  // supported"), so the token is asked for with an inline form instead of a
+  // blocking dialog — same tab, no navigation, works everywhere.
+  function showTokenForm(message) {
+    els.notice.innerHTML = '<div class="notice error">' + esc(message) +
+      '<form class="token-form" data-token-form autocomplete="off">' +
+      '<input type="password" name="token" placeholder="粘贴 DASHBOARD_TOKEN" aria-label="看板访问令牌" autocomplete="off" spellcheck="false">' +
+      '<button type="submit" class="btn">连接</button>' +
+      '</form></div>';
+    var input = els.notice.querySelector("input[name=token]");
+    if (input) { try { input.focus(); } catch (error) { /* ignore */ } }
+  }
+
+  function plainMessage(message) {
+    return String(message == null ? "" : message).replace(/[。.;；\s]+$/, "");
+  }
+
   /* The summary request crosses the border to workers.dev. On some networks that
    * connection stalls instead of failing, and this dashboard used to sit on
    * 「正在读取数据…」 for ever because fetch() had no deadline. Every attempt now
@@ -706,32 +731,34 @@
     state.demo = true;
     state.data = window.SAMPLE_SUMMARY;
     state.error = message || "";
-    if (message) setNotice(esc(message) + " 已切换到内置示例数据（合成数据，不是真实访问量）。" + retryControl(), Boolean(isError));
+    if (message) setNotice(esc(plainMessage(message)) + " 已切换到内置示例数据（合成数据，不是真实访问量）。" + retryControl(), Boolean(isError));
     else setNotice("当前展示的是<strong>内置示例数据</strong>（合成数据，用于演示看板与验证口径）。接入真实的 <code>/api/summary</code> 后这里会显示实时数据。");
     return true;
   }
 
   function authToken() {
-    // Priority: explicit ?token= / #token= (lets a bookmarked one-click URL
-    // override an old token) → sessionStorage from a previous entry.
+    // Priority: in-memory (typed into the inline form) → explicit ?token= / #token=
+    // (a bookmarked one-click URL overrides an old token) → sessionStorage.
     var fromHash = hashParams.get("token") || "";
     var fromQuery = params.get("token") || "";
     var candidate = fromHash || fromQuery;
+    if (candidate) {
+      storeToken(candidate);
+      return candidate;
+    }
+    if (state.token) return state.token;
     try {
-      if (candidate) {
-        sessionStorage.setItem("pf_dash_token", candidate);
-        return candidate;
-      }
       return sessionStorage.getItem("pf_dash_token") || "";
     } catch (error) {
-      return candidate;
+      return "";
     }
   }
   function storeToken(token) {
-    try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* ignore */ }
+    state.token = token;
+    try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* sessionStorage may be unavailable */ }
   }
 
-  async function fetchRemote(days, retry) {
+  async function fetchRemote(days) {
     var base = REMOTE_BASE || "";
     var url = base + "/api/summary?days=" + days;
     var headers = {};
@@ -755,14 +782,9 @@
       clearTimeout(timer);
     }
     if (response.status === 401 || response.status === 503) {
-      if (!retry) {
-        var entered = window.prompt("请输入看板访问令牌（Worker 的 DASHBOARD_TOKEN）：", "");
-        if (entered) {
-          storeToken(entered.trim());
-          return fetchRemote(days, true);
-        }
-      }
-      throw new Error("需要看板访问令牌（401/503）");
+      var authError = new Error("需要看板访问令牌（401/503）");
+      authError.code = "AUTH_REQUIRED";
+      throw authError;
     }
     if (!response.ok) throw new Error("数据接口返回 HTTP " + response.status);
     return response.json();
@@ -826,7 +848,22 @@
       paint();
     } catch (error) {
       if (seq !== loadSeq) return; // 同上：只让最新一次刷新决定界面状态
-      var message = "无法连接实时数据源：" + (error.message || error);
+      if (error && error.code === "AUTH_REQUIRED") {
+        var hadToken = Boolean(authToken());
+        var authReason = hadToken
+          ? "看板访问令牌无效或已失效（接口返回 401）。重新粘贴 DASHBOARD_TOKEN 后点「连接」，也可用 dashboard.html#token=… 打开。"
+          : "数据接口需要看板访问令牌（401/503）。粘贴 DASHBOARD_TOKEN 后点「连接」，也可用 dashboard.html#token=… 打开。";
+        if (state.data && !state.demo) {
+          els.sourceBadge.className = "badge offline";
+          els.sourceBadge.textContent = "需要令牌";
+          els.loading.hidden = true;
+        } else if (applyDemo("无法连接实时数据源：需要看板访问令牌。", true)) {
+          paint();
+        }
+        showTokenForm(authReason);
+        return;
+      }
+      var message = "无法连接实时数据源：" + plainMessage(error && (error.message || error));
       if (state.data && !state.demo) {
         // Something usable is already on screen — keep it, say why, offer a retry.
         els.sourceBadge.className = "badge offline";
@@ -1532,6 +1569,20 @@
   // Retry control in an error notice (timeout / network / 401).
   document.addEventListener("click", function (event) {
     if (event.target && event.target.closest && event.target.closest("[data-retry]")) load();
+  });
+  // Inline token form: replaces window.prompt, which some embedded browsers lack.
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (!form || !form.closest || !form.closest("[data-token-form]")) return;
+    event.preventDefault();
+    var input = form.querySelector("input[name=token]");
+    var value = input ? String(input.value || "").trim() : "";
+    if (!value) {
+      if (input) input.focus();
+      return;
+    }
+    storeToken(value);
+    load();
   });
   window.addEventListener("resize", function () {
     if (!state.data) return;
