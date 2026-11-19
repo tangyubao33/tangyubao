@@ -15,6 +15,7 @@ export const PROJECTS = [
   { key: "douyin/douyin-ai-cover", id: "douyin-ai-cover", name: "抖音AI封面", experience: "douyin", company: "抖音", content: 9, total: 10 },
   { key: "douyin/douyin-other", id: "douyin-other", name: "抖音其他项目", experience: "douyin", company: "抖音", content: 5, total: 6 },
   { key: "douyin/douyin-ai-practice", id: "douyin-ai-practice", name: "个人AI转型实践", experience: "douyin", company: "抖音", content: 6, total: 7 },
+  { key: "jd/jd-shufang", id: "jd-shufang", name: "京东数坊平台 · 营销数据", experience: "jd", company: "京东零售", content: 36, total: 37 },
   { key: "kingsoft/kingsoft-powerword", id: "kingsoft-powerword", name: "金山词霸", experience: "kingsoft", company: "金山办公", content: 10, total: 11 }
 ];
 

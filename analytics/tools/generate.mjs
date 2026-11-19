@@ -13,6 +13,7 @@ const PROJECTS = [
   { key: "douyin/douyin-ai-cover", id: "douyin-ai-cover", name: "抖音AI封面", experience: "douyin", company: "抖音", total: 10, content: 9, weight: 0.2, click: 0.14, firstExit: 0.24, drop: 0.16, dwell: 8 },
   { key: "douyin/douyin-other", id: "douyin-other", name: "抖音其他项目", experience: "douyin", company: "抖音", total: 6, content: 5, weight: 0.1, click: 0.1, firstExit: 0.26, drop: 0.2, dwell: 7 },
   { key: "douyin/douyin-ai-practice", id: "douyin-ai-practice", name: "个人AI转型实践", experience: "douyin", company: "抖音", total: 7, content: 6, weight: 0.11, click: 0.13, firstExit: 0.2, drop: 0.18, dwell: 9 },
+  { key: "jd/jd-shufang", id: "jd-shufang", name: "京东数坊平台 · 营销数据", experience: "jd", company: "京东零售", total: 37, content: 36, weight: 0.1, click: 0.16, firstExit: 0.18, drop: 0.11, dwell: 11 },
   { key: "kingsoft/kingsoft-powerword", id: "kingsoft-powerword", name: "金山词霸", experience: "kingsoft", company: "金山办公", total: 11, content: 10, weight: 0.07, click: 0.18, firstExit: 0.22, drop: 0.17, dwell: 8 }
 ];
 

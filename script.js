@@ -47,6 +47,16 @@ const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
 const isMobileLayout = () => mobileLayoutQuery.matches;
 analytics?.pageView?.();
 
+const jdSlides = Array.from({ length: 36 }, (_, index) => {
+  const number = index + 1;
+  const extension = [22, 33].includes(number) ? "jpg" : "png";
+  return {
+    src: `${assetRoot}/图片${number}.${extension}`,
+    thumb: `assets/slide-thumbs/jd-${pad(number)}.webp`,
+    alt: `京东数坊案例第 ${number} 页`
+  };
+});
+
 const kingsoftPages = [30, 31, 32, 33, 34, 35, 37, 38, 40, 41];
 const kingsoftSlides = kingsoftPages.map((number, index) => ({
   src: `${assetRoot}/C端${number}.png`,
@@ -186,7 +196,8 @@ const pickSlideSource = (slide) => {
   return base;
 };
 
-// The legacy Kingsoft pages also get responsive variants.
+// Legacy JD (36 pages; page 37 removed) / Kingsoft pages get responsive variants.
+jdSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); });
 kingsoftSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); });
 
 /* Keep the next few pages decoded before they are needed. Merely warming the
@@ -551,8 +562,30 @@ const experiences = {
       }
     ]
   },
+  jd: {
+    id: "jd",
+    period: "2020~2022",
+    company: "京东零售",
+    mark: "JD",
+    logo: "assets/marks/jd.webp",
+    accent: "#ed2630",
+    markBg: "#ed2630",
+    role: "资深体验设计师",
+    meta: "数坊项目设计负责人",
+    caption: "项目主导与管理",
+    projectNames: ["京东数坊平台 · 营销数据"],
+    projects: [
+      {
+        id: "jd-shufang",
+        name: "京东数坊平台 · 营销数据",
+        type: "DATA PRODUCT · B2B",
+        description: "融合营销数据产品与复杂信息体验",
+        cover: "assets/thumbs/jd.jpg",
+        slides: jdSlides
+      }
+    ]
+  },
   kingsoft: {
-    id: "kingsoft",
     // 2016~2020 的经历距今年代较远，不再在首页作品流与末页「其他项目」里露出；
     // 数据整段保留（含封面与 10 页作品），「关于我」里的任职经历也继续显示。
     // 恢复展示只需删掉这一行。
