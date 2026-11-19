@@ -436,6 +436,7 @@
 - **素材**：仅删除第 37 页的 7 个文件——`唐尉保作品集2_files/图片37.png` 与 `.w960/.w1280/.w1920/.w2560.webp`、`assets/slide-thumbs/jd-37.webp` 与 `jd-37.w240.webp`；其余 36 页母版 + 144 个变体、72 张 JD 缩略图、`jd.jpg` 封面及 8 个变体均保留。
 - **埋点**：`analytics/summary.js` 与 `analytics/tools/generate.mjs` 的 `jd/jd-shufang` 恢复为 **content 36 / total 37**，并重新生成 `analytics/sample-summary.js`；`verify-summary` 40 项检查通过。
 - **验收**：首页 2 段经历 5 张封面、JD 卡片 `36 PAGES`；查看器 37 页（第 36 页为最后内容页、第 37 页为封底）；手机预览连续平铺 37 页、其他项目 4 项；`#project/jd/jd-shufang` 正常打开；`图片37*` / `jd-37*` 旧地址返回 404；无 JS 报错；`script.js?v=20261119m3` 升版。
+- **上线（2026-11-19）**：修正提交 `3bc5d2b` 推送（`285e8cd..3bc5d2b`），GitHub Pages 部署后线上 `script.js?v=20261119m3`。线上复核：首页「抖音 4 + 京东零售 1」2 段经历 5 张封面、JD 卡片 `36 PAGES`；JD 查看器缩略图 37 张、`01/37` 起、第 36 页为 `图片36.w1280.webp`、第 37 页为封底、`37/37`；手机预览 37 页、其他项目 4 项；`assets/slide-thumbs/jd-36.webp` 与 `图片36.png` 返回 200、`图片37.png` 返回 404、`jd.jpg` 返回 200；无 JS 报错。
 
 ## 7. 手机端纵向布局（2026-11-17）
 
