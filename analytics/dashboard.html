@@ -85,6 +85,13 @@
   .loading-note { font-size: 11.5px; color: var(--dim); max-width: 520px; text-align: center; line-height: 1.6; }
   .badge.stale::before { background: var(--accent); }
   .notice .btn { margin-left: 10px; padding: 3px 10px; font-size: 11.5px; }
+  .token-form { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: 10px; }
+  .token-form input {
+    width: 250px; max-width: 60vw; padding: 5px 10px; border-radius: 9px;
+    border: 1px solid #51262b; background: #1b0f11; color: var(--text);
+    font: inherit; font-size: 12.5px;
+  }
+  .token-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .spinner {
     width: 26px; height: 26px; border-radius: 50%;
     border: 2px solid #2a3340; border-top-color: var(--accent);
@@ -204,8 +211,9 @@
   .bars { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
   .bar-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 74px; gap: 10px; align-items: center; font-size: 12px; }
   .bar-row .name { color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bar-row .track { height: 8px; background: #0d1015; border-radius: 4px; overflow: hidden; }
+  .bar-row .track { position: relative; height: 8px; background: #0d1015; border-radius: 4px; overflow: hidden; }
   .bar-row .track i { display: block; height: 100%; border-radius: 4px; background: var(--blue); }
+  .bar-row .track b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--orange); opacity: .9; }
   .bar-row .val { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .stat-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
@@ -426,22 +434,25 @@
       </div>
     </section>
 
-    <div class="section-head"><h2>访问地域</h2><span class="hint">不存原始 IP；仅 Cloudflare 边缘解析出的国家 / 省州 / 城市（按会话去重）</span></div>
+    <div class="section-head"><h2>访问地域</h2><span class="hint">不存原始 IP；国家 / 省州 / 城市按会话去重；经代理 / WARP / VPN 的访问显示为出口节点</span></div>
     <section class="grid two">
       <div class="card">
         <h3>国家 / 地区 · 省州</h3>
-        <p class="card-sub">访客来源分布；IP 仅用于边缘解析，不落库</p>
+        <p class="card-sub">访客来源分布；IP 仅用于边缘解析，不落库；「代理」= 云厂商 / WARP / VPN 出口</p>
         <div id="geoStats" class="stat-list"></div>
         <div class="divider"></div>
         <div id="geoCountries" class="bars"></div>
         <div class="divider"></div>
         <div id="geoRegions" class="bars"></div>
+        <div class="divider"></div>
+        <p class="muted" style="margin:0 0 8px;font-size:11.5px">橙色段 = 疑似代理 / 机房出口（这些会话的「国家 / 城市」只是出口节点所在地）；同一批出口的运营商见下方</p>
+        <div id="geoProxy" class="bars"></div>
       </div>
       <div class="card">
         <h3>城市</h3>
         <p class="card-sub">Top 12 城市；城市精度受 Cloudflare 边缘数据限制</p>
         <div id="geoCities" class="bars"></div>
-        <p class="muted" style="margin:12px 0 0;font-size:11.5px">说明：只保存国家 / 省州 / 城市三个粗粒度字段，不保存 IP、经纬度或精确地址。可在 D1 中按需删除。</p>
+        <p class="muted" style="margin:12px 0 0;font-size:11.5px">说明：只保存国家 / 省州 / 城市三个粗粒度字段（另存出口 ASN / 运营商，用于识别代理），不保存 IP、经纬度或精确地址。地区按「上报时」的出口 IP 判定：挂 WARP / VPN / 代理的访问会记成出口节点所在国家（看板标注「代理」）；切换网络后批量上报的事件也可能记到新出口。可在 D1 中按需删除。</p>
       </div>
     </section>
 
@@ -486,6 +497,7 @@
     demo: false,
     cached: false,
     latency: 0,
+    token: "",
     error: "",
     projectKey: "",
     trend: { sessions: true, boot_attempts: false, boot_success: false, home_views: false, impressions: false, card_clicks: true, viewer_opens: true, about_opens: false, resume_downloads: false }
@@ -526,6 +538,7 @@
     geoCountries: document.getElementById("geoCountries"),
     geoRegions: document.getElementById("geoRegions"),
     geoCities: document.getElementById("geoCities"),
+    geoProxy: document.getElementById("geoProxy"),
     deviceStats: document.getElementById("deviceStats"),
     deviceBars: document.getElementById("deviceBars"),
     referrerBars: document.getElementById("referrerBars"),
@@ -604,9 +617,15 @@
       ? items.map(function (item) {
         var width = Math.max(1, ((Number(item.value) || 0) / max) * 100);
         var color = item.color || opts.color || "";
-        return '<div class="bar-row"><span class="name" title="' + esc(item.name) + '">' + esc(item.name) +
+        var proxyValue = Number(item.proxyValue) || 0;
+        var proxyWidth = proxyValue && Number(item.value) ? Math.max(1, (proxyValue / Number(item.value)) * width) : 0;
+        var tip = item.name + "：" + fmtNum(item.value) +
+          (item.display != null ? "（" + item.display + "）" : "") +
+          (proxyValue ? " · 其中疑似代理出口 " + fmtNum(proxyValue) : "");
+        return '<div class="bar-row" title="' + esc(tip) + '"><span class="name" title="' + esc(item.name) + '">' + esc(item.name) +
           '</span><span class="track"><i style="width:' + width.toFixed(1) + "%;" + (color ? "background:" + color : "") +
-          '"></i></span><span class="val">' + esc(item.display != null ? item.display : fmtNum(item.value)) + "</span></div>";
+          '"></i>' + (proxyWidth ? '<b style="width:' + proxyWidth.toFixed(1) + '%"></b>' : "") +
+          '</span><span class="val">' + esc(item.display != null ? item.display : fmtNum(item.value)) + "</span></div>";
       }).join("")
       : '<p class="muted" style="margin:0">暂无数据</p>';
   }
@@ -625,6 +644,23 @@
 
   function setNotice(html, isError) {
     els.notice.innerHTML = html ? '<div class="notice' + (isError ? " error" : "") + '">' + html + "</div>" : "";
+  }
+
+  // `window.prompt` is missing in some embedded webviews ("prompt() is not
+  // supported"), so the token is asked for with an inline form instead of a
+  // blocking dialog — same tab, no navigation, works everywhere.
+  function showTokenForm(message) {
+    els.notice.innerHTML = '<div class="notice error">' + esc(message) +
+      '<form class="token-form" data-token-form autocomplete="off">' +
+      '<input type="password" name="token" placeholder="粘贴 DASHBOARD_TOKEN" aria-label="看板访问令牌" autocomplete="off" spellcheck="false">' +
+      '<button type="submit" class="btn">连接</button>' +
+      '</form></div>';
+    var input = els.notice.querySelector("input[name=token]");
+    if (input) { try { input.focus(); } catch (error) { /* ignore */ } }
+  }
+
+  function plainMessage(message) {
+    return String(message == null ? "" : message).replace(/[。.;；\s]+$/, "");
   }
 
   /* The summary request crosses the border to workers.dev. On some networks that
@@ -706,32 +742,34 @@
     state.demo = true;
     state.data = window.SAMPLE_SUMMARY;
     state.error = message || "";
-    if (message) setNotice(esc(message) + " 已切换到内置示例数据（合成数据，不是真实访问量）。" + retryControl(), Boolean(isError));
+    if (message) setNotice(esc(plainMessage(message)) + " 已切换到内置示例数据（合成数据，不是真实访问量）。" + retryControl(), Boolean(isError));
     else setNotice("当前展示的是<strong>内置示例数据</strong>（合成数据，用于演示看板与验证口径）。接入真实的 <code>/api/summary</code> 后这里会显示实时数据。");
     return true;
   }
 
   function authToken() {
-    // Priority: explicit ?token= / #token= (lets a bookmarked one-click URL
-    // override an old token) → sessionStorage from a previous entry.
+    // Priority: in-memory (typed into the inline form) → explicit ?token= / #token=
+    // (a bookmarked one-click URL overrides an old token) → sessionStorage.
     var fromHash = hashParams.get("token") || "";
     var fromQuery = params.get("token") || "";
     var candidate = fromHash || fromQuery;
+    if (candidate) {
+      storeToken(candidate);
+      return candidate;
+    }
+    if (state.token) return state.token;
     try {
-      if (candidate) {
-        sessionStorage.setItem("pf_dash_token", candidate);
-        return candidate;
-      }
       return sessionStorage.getItem("pf_dash_token") || "";
     } catch (error) {
-      return candidate;
+      return "";
     }
   }
   function storeToken(token) {
-    try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* ignore */ }
+    state.token = token;
+    try { sessionStorage.setItem("pf_dash_token", token); } catch (error) { /* sessionStorage may be unavailable */ }
   }
 
-  async function fetchRemote(days, retry) {
+  async function fetchRemote(days) {
     var base = REMOTE_BASE || "";
     var url = base + "/api/summary?days=" + days;
     var headers = {};
@@ -755,14 +793,9 @@
       clearTimeout(timer);
     }
     if (response.status === 401 || response.status === 503) {
-      if (!retry) {
-        var entered = window.prompt("请输入看板访问令牌（Worker 的 DASHBOARD_TOKEN）：", "");
-        if (entered) {
-          storeToken(entered.trim());
-          return fetchRemote(days, true);
-        }
-      }
-      throw new Error("需要看板访问令牌（401/503）");
+      var authError = new Error("需要看板访问令牌（401/503）");
+      authError.code = "AUTH_REQUIRED";
+      throw authError;
     }
     if (!response.ok) throw new Error("数据接口返回 HTTP " + response.status);
     return response.json();
@@ -772,12 +805,14 @@
     document.querySelectorAll("[data-days]").forEach(function (button) {
       button.disabled = state.demo;
     });
-    if (!state.projectKey && state.data.current.projects.length) {
-      state.projectKey = state.data.current.projects[0].key;
+    var projects = (state.data.current && state.data.current.projects) || [];
+    if (!state.projectKey && projects.length) {
+      state.projectKey = projects[0].key;
     }
-    render();
+    // 先把内容区显示出来，再渲染各板块：即使某一块抛错，其它板块也不至于整页空白
     els.loading.hidden = true;
     els.content.hidden = false;
+    render();
   }
 
   var loadSeq = 0;
@@ -812,10 +847,12 @@
     }
 
     var startedAt = Date.now();
+    var fetched = false;
     try {
       var data = await fetchRemote(state.days);
       if (seq !== loadSeq) return; // 新的刷新已经开始，丢弃这次迟到的结果
       if (!data || !data.current) throw new Error("数据格式不正确");
+      fetched = true;
       state.demo = false;
       state.cached = false;
       state.data = data;
@@ -826,7 +863,24 @@
       paint();
     } catch (error) {
       if (seq !== loadSeq) return; // 同上：只让最新一次刷新决定界面状态
-      var message = "无法连接实时数据源：" + (error.message || error);
+      if (error && error.code === "AUTH_REQUIRED") {
+        var hadToken = Boolean(authToken());
+        var authReason = hadToken
+          ? "看板访问令牌无效或已失效（接口返回 401）。重新粘贴 DASHBOARD_TOKEN 后点「连接」，也可用 dashboard.html#token=… 打开。"
+          : "数据接口需要看板访问令牌（401/503）。粘贴 DASHBOARD_TOKEN 后点「连接」，也可用 dashboard.html#token=… 打开。";
+        if (state.data && !state.demo) {
+          els.sourceBadge.className = "badge offline";
+          els.sourceBadge.textContent = "需要令牌";
+          els.loading.hidden = true;
+        } else if (applyDemo("无法连接实时数据源：需要看板访问令牌。", true)) {
+          paint();
+        }
+        showTokenForm(authReason);
+        return;
+      }
+      // 请求成功但渲染抛错时不要把话说成「连不上数据源」
+      var message = (fetched ? "数据已获取，但看板渲染出错：" : "无法连接实时数据源：") +
+        plainMessage(error && (error.message || error));
       if (state.data && !state.demo) {
         // Something usable is already on screen — keep it, say why, offer a retry.
         els.sourceBadge.className = "badge offline";
@@ -843,12 +897,28 @@
 
   /* ---------------------------------------------------------------- render */
 
+  /* 单个板块渲染失败不应该让整页黑掉：缺字段（Worker/看板版本不一致、
+   * 某段聚合为空）时只跳过这一块，并在页面顶部提示哪一块没画出来。 */
+  var sectionFailures = [];
+  function safeSection(label, run) {
+    try {
+      run();
+    } catch (error) {
+      sectionFailures.push(label + "：" + ((error && error.message) || error));
+      if (window.console && console.warn) console.warn("[dashboard] " + label + " 渲染失败", error);
+    }
+  }
+
   function render() {
     var data = state.data;
     var current = data.current;
     var previous = data.previous || { overview: {}, projects: [] };
-    var o = current.overview;
+    var o = current.overview || {};
     var p = previous.overview || {};
+    var about = current.about || {};
+    var actions = current.actions || {};
+    var funnels = current.funnel || {};
+    sectionFailures = [];
 
     els.sourceBadge.className = "badge" + (state.demo ? " demo" : (state.cached ? " stale" : ""));
     els.sourceBadge.textContent = state.demo
@@ -859,51 +929,64 @@
           ? " · " + (state.latency < 1000 ? Math.round(state.latency) + "ms" : (state.latency / 1000).toFixed(1) + "s")
           : ""));
 
-    var rangeFrom = current.meta.from ? new Date(current.meta.from).toLocaleDateString("zh-CN") : "";
-    var rangeTo = current.meta.to ? new Date(current.meta.to).toLocaleDateString("zh-CN") : "";
+    var rangeFrom = current.meta && current.meta.from ? new Date(current.meta.from).toLocaleDateString("zh-CN") : "";
+    var rangeTo = current.meta && current.meta.to ? new Date(current.meta.to).toLocaleDateString("zh-CN") : "";
     els.rangeHint.textContent = rangeFrom ? rangeFrom + " – " + rangeTo + " · " + fmtNum(current.meta.event_count) + " 条事件" : "";
 
     var sessions = o.sessions || 0;
     var boot = current.boot || { attempts: 0, successes: 0 };
     var previousBoot = previous.boot || {};
-    var kpiRows = [
-      kpi("访问会话", fmtNum(sessions), "独立访客 " + fmtNum(o.visitors) + " · 平均 " + fmtMs(o.avg_session_ms), delta(o.sessions, p.sessions, "count", "up")),
-      kpi("网页打开成功率", boot.attempts ? fmtPct(boot.success_rate) : "—",
-        boot.attempts ? fmtNum(boot.successes) + " / " + fmtNum(boot.attempts) + " 次打开" : "等待新数据",
-        delta(boot.success_rate, previousBoot.success_rate, "rate", "up")),
-      kpi("首页曝光会话", fmtNum(o.home_sessions), "首页浏览 " + fmtNum(o.home_views) + " 次 · 封面曝光 " + fmtNum(o.impressions) + " 次", delta(o.home_sessions, p.home_sessions, "count", "up")),
-      kpi("作品点击", fmtNum(o.card_clicks), "点击会话率 " + fmtPct(o.click_session_rate), delta(o.card_clicks, p.card_clicks, "count", "up")),
-      kpi("作品打开", fmtNum(o.viewer_opens), "打开率 " + fmtPct(sessions ? (o.viewer_sessions / sessions) * 100 : 0), delta(o.viewer_opens, p.viewer_opens, "count", "up")),
-      kpi("平均浏览深度", fmtPct(o.viewer_avg_depth_pct), "平均 " + fmtMs(o.viewer_avg_ms), delta(o.viewer_avg_depth_pct, p.viewer_avg_depth_pct, "rate", "up")),
-      kpi("首屏跳出率", fmtPct(o.viewer_bounce_rate), "只看第 1 页就退出", delta(o.viewer_bounce_rate, p.viewer_bounce_rate, "rate", "down")),
-      kpi("关于我打开率", fmtPct(o.about_open_rate), fmtNum(o.about_open_sessions) + " / " + fmtNum(sessions) + " 会话", delta(o.about_open_rate, p.about_open_rate, "rate", "up")),
-      kpi("简历下载", fmtNum(o.resume_downloads), "下载率 " + fmtPct(o.resume_download_rate), delta(o.resume_downloads, p.resume_downloads, "count", "up")),
-      kpi("作品看完率", fmtPct(o.viewer_completion_rate), "看到最后一个内容页", delta(o.viewer_completion_rate, p.viewer_completion_rate, "rate", "up"))
-    ];
-    els.kpis.innerHTML = kpiRows.join("");
-    renderBootAndPerf(current);
 
-    funnel(els.funnelBrowse, current.funnel.browse, "");
-    funnel(els.funnelConvert, current.funnel.convert, "convert");
-    els.convertExtras.innerHTML = [
-      stat("关于我停留均值", fmtMs(current.about.avg_ms), "弹窗内停留"),
-      stat("下载 / 打开", fmtPct(current.about.per_open), "每次打开带来下载"),
-      stat("主栏阅读深度", fmtPct(current.about.avg_main_scroll), "右栏滚动到底比例"),
-      stat("联系方式点击", fmtNum(current.actions.contact_clicks), "电话 / 邮箱")
-    ].join("");
+    safeSection("总览 KPI", function () {
+      var kpiRows = [
+        kpi("访问会话", fmtNum(sessions), "独立访客 " + fmtNum(o.visitors) + " · 平均 " + fmtMs(o.avg_session_ms), delta(o.sessions, p.sessions, "count", "up")),
+        kpi("网页打开成功率", boot.attempts ? fmtPct(boot.success_rate) : "—",
+          boot.attempts ? fmtNum(boot.successes) + " / " + fmtNum(boot.attempts) + " 次打开" : "等待新数据",
+          delta(boot.success_rate, previousBoot.success_rate, "rate", "up")),
+        kpi("首页曝光会话", fmtNum(o.home_sessions), "首页浏览 " + fmtNum(o.home_views) + " 次 · 封面曝光 " + fmtNum(o.impressions) + " 次", delta(o.home_sessions, p.home_sessions, "count", "up")),
+        kpi("作品点击", fmtNum(o.card_clicks), "点击会话率 " + fmtPct(o.click_session_rate), delta(o.card_clicks, p.card_clicks, "count", "up")),
+        kpi("作品打开", fmtNum(o.viewer_opens), "打开率 " + fmtPct(sessions ? (o.viewer_sessions / sessions) * 100 : 0), delta(o.viewer_opens, p.viewer_opens, "count", "up")),
+        kpi("平均浏览深度", fmtPct(o.viewer_avg_depth_pct), "平均 " + fmtMs(o.viewer_avg_ms), delta(o.viewer_avg_depth_pct, p.viewer_avg_depth_pct, "rate", "up")),
+        kpi("首屏跳出率", fmtPct(o.viewer_bounce_rate), "只看第 1 页就退出", delta(o.viewer_bounce_rate, p.viewer_bounce_rate, "rate", "down")),
+        kpi("关于我打开率", fmtPct(o.about_open_rate), fmtNum(o.about_open_sessions) + " / " + fmtNum(sessions) + " 会话", delta(o.about_open_rate, p.about_open_rate, "rate", "up")),
+        kpi("简历下载", fmtNum(o.resume_downloads), "下载率 " + fmtPct(o.resume_download_rate), delta(o.resume_downloads, p.resume_downloads, "count", "up")),
+        kpi("作品看完率", fmtPct(o.viewer_completion_rate), "看到最后一个内容页", delta(o.viewer_completion_rate, p.viewer_completion_rate, "rate", "up"))
+      ];
+      els.kpis.innerHTML = kpiRows.join("");
+    });
 
-    renderTrend(current);
-    renderHome(current, previous);
-    renderViewer(current);
-    renderAbout(current);
-    renderStructure(current);
-    renderGeo(current);
-    renderInsights(current, previous);
+    safeSection("打开成功率与加载性能", function () { renderBootAndPerf(current); });
+
+    safeSection("转化漏斗", function () {
+      funnel(els.funnelBrowse, funnels.browse || [], "");
+      funnel(els.funnelConvert, funnels.convert || [], "convert");
+      els.convertExtras.innerHTML = [
+        stat("关于我停留均值", fmtMs(about.avg_ms), "弹窗内停留"),
+        stat("下载 / 打开", fmtPct(about.per_open), "每次打开带来下载"),
+        stat("主栏阅读深度", fmtPct(about.avg_main_scroll), "右栏滚动到底比例"),
+        stat("联系方式点击", fmtNum(actions.contact_clicks), "电话 / 邮箱")
+      ].join("");
+    });
+
+    safeSection("趋势", function () { renderTrend(current); });
+    safeSection("首页", function () { renderHome(current, previous); });
+    safeSection("作品浏览", function () { renderViewer(current); });
+    safeSection("关于我", function () { renderAbout(current); });
+    safeSection("结构", function () { renderStructure(current); });
+    safeSection("访问地域", function () { renderGeo(current); });
+    safeSection("体验诊断", function () { renderInsights(current, previous); });
+
     els.metaLine.textContent = "数据源：" + (state.demo ? "内置示例数据（合成）" : (REMOTE_BASE ? (REMOTE_BASE || location.origin) : "本地 collector")) +
-      " · 生成时间：" + new Date(current.meta.generated_at).toLocaleString("zh-CN") +
+      " · 生成时间：" + new Date(current.meta && current.meta.generated_at ? current.meta.generated_at : Date.now()).toLocaleString("zh-CN") +
       (state.cached ? "（缓存显示，正在后台刷新）" : "") +
-      " · 事件 " + fmtNum(current.meta.event_count) + " 条 · 会话 " + fmtNum(current.meta.session_count) + " 个";
+      " · 事件 " + fmtNum(current.meta && current.meta.event_count) + " 条 · 会话 " + fmtNum(current.meta && current.meta.session_count) + " 个";
     document.title = "数据看板 · " + fmtNum(sessions) + " 会话 · 唐尉保作品集";
+
+    if (sectionFailures.length) {
+      var warning = "部分板块渲染失败（" + sectionFailures.length + "）：" + sectionFailures.join("；");
+      if (!els.notice.innerHTML) setNotice(esc(warning), true);
+      els.rangeHint.textContent += " · " + sectionFailures.length + " 个板块渲染失败（见控制台）";
+    }
   }
 
   function renderTrend(current) {
@@ -1245,19 +1328,34 @@
   function renderGeo(current) {
     var geo = current.geo || { samples: 0, countries: [], regions: [], cities: [] };
     var samples = geo.samples || 0;
-    els.geoStats.innerHTML = [
+    var proxySessions = geo.proxy_sessions;
+    // 旧版 Worker 还没有代理字段：不显示代理相关行，也不报错
+    var hasProxyInfo = proxySessions !== undefined;
+    var stats = [
       stat("有地域数据会话", fmtNum(samples), geo.unknown ? "未知 " + fmtNum(geo.unknown) + " 个会话" : "覆盖全部会话"),
       stat("国家 / 地区", fmtNum((geo.countries || []).length), (geo.countries || [])[0] ? "最多：" + countryLabel(geo.countries[0].code) : ""),
       stat("省 / 州", fmtNum((geo.regions || []).length), ""),
       stat("城市", fmtNum((geo.cities || []).length), "")
-    ].join("");
+    ];
+    if (hasProxyInfo) {
+      stats.push(stat("疑似代理出口", fmtNum(proxySessions),
+        samples ? fmtPct((proxySessions / samples) * 100) + " 的会话来自云厂商 / WARP / VPN" : "暂无"));
+    }
+    els.geoStats.innerHTML = stats.join("");
+    // 代理会话用橙色叠加在条形上（hover 有详细数字），不把长文案塞进右侧数值列
     bars(els.geoCountries, (geo.countries || []).slice(0, 12).map(function (item) {
-      return { name: countryLabel(item.code), value: item.sessions, display: fmtNum(item.sessions) + " · " + fmtPct(item.pct) };
+      return {
+        name: countryLabel(item.code),
+        value: item.sessions,
+        proxyValue: item.proxy,
+        display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
+      };
     }), { color: "#6ea8fe" });
     bars(els.geoRegions, (geo.regions || []).slice(0, 12).map(function (item) {
       return {
         name: countryLabel(item.country) + " · " + regionLabel(item.region),
         value: item.sessions,
+        proxyValue: item.proxy,
         display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
       };
     }), { color: "#b58cff" });
@@ -1265,13 +1363,34 @@
       return {
         name: countryLabel(item.country) + " · " + (item.city || regionLabel(item.region)),
         value: item.sessions,
+        proxyValue: item.proxy,
         display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
       };
     }), { color: "#3ddc97" });
+    if (els.geoProxy) {
+      if (hasProxyInfo && (geo.proxy_orgs || []).length) {
+        bars(els.geoProxy, geo.proxy_orgs.slice(0, 8).map(function (item) {
+          return {
+            name: item.name,
+            value: item.sessions,
+            display: fmtNum(item.sessions) + " · " + fmtPct(item.pct)
+          };
+        }), { color: "#ffa94d" });
+      } else {
+        els.geoProxy.innerHTML = '<p class="muted" style="margin:0;font-size:11.5px">' +
+          (hasProxyInfo
+            ? (samples
+              ? "这段时间没有检测到云厂商 / WARP / VPN 出口。注意：<code>0003_asn</code> 迁移前入库的历史事件没有 ASN，不会被标记，代理识别从部署后的新访问开始生效。"
+              : "这段范围还没有地域数据。")
+            : "Worker 部署 <code>0003_asn</code> 迁移后开始记录出口 ASN；届时 Cloudflare / 云厂商出口会列在这里。") +
+          "</p>";
+      }
+    }
     if (!samples) {
       els.geoCountries.innerHTML = '<p class="muted" style="margin:0">暂无地域数据；Worker 需要部署 0002_geo 迁移后才会写入国家/省州/城市。</p>';
       els.geoRegions.innerHTML = "";
       els.geoCities.innerHTML = "";
+      if (els.geoProxy) els.geoProxy.innerHTML = "";
     }
   }
 
@@ -1381,7 +1500,7 @@
     }
     if (o.about_open_sessions > 0 && o.resume_download_rate < 5) {
       add("high", "简历下载转化低", "下载仅占 " + fmtPct(o.resume_download_rate) + " 的会话；打开关于我的人里 " +
-        fmtPct(o.about.per_open) + " 下载了简历。", "下载按钮固定在左栏可见区域（移动端不要被滚动藏在底部）；文案明确「PDF · 735KB · 1 页」。");
+        fmtPct((current.about || {}).per_open) + " 下载了简历。", "下载按钮固定在左栏可见区域（移动端不要被滚动藏在底部）；文案明确「PDF · 735KB · 1 页」。");
     }
     if (mobile && desktop && mobile.bounce_rate - desktop.bounce_rate > 8) {
       add("medium", "移动端作品体验更差", "手机首屏跳出 " + fmtPct(mobile.bounce_rate) + "，桌面 " + fmtPct(desktop.bounce_rate) +
@@ -1532,6 +1651,20 @@
   // Retry control in an error notice (timeout / network / 401).
   document.addEventListener("click", function (event) {
     if (event.target && event.target.closest && event.target.closest("[data-retry]")) load();
+  });
+  // Inline token form: replaces window.prompt, which some embedded browsers lack.
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (!form || !form.closest || !form.closest("[data-token-form]")) return;
+    event.preventDefault();
+    var input = form.querySelector("input[name=token]");
+    var value = input ? String(input.value || "").trim() : "";
+    if (!value) {
+      if (input) input.focus();
+      return;
+    }
+    storeToken(value);
+    load();
   });
   window.addEventListener("resize", function () {
     if (!state.data) return;

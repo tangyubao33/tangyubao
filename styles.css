@@ -293,6 +293,7 @@ body.is-about-open { overflow: hidden; }
 
 .home-footer { position: absolute; z-index: 2; inset: auto clamp(24px, 3.6vw, 64px) 22px; display: flex; justify-content: space-between; color: #79838f; font-size: 8px; font-weight: 650; letter-spacing: .42em; }
 .home-footer span:nth-child(2) { letter-spacing: .08em; }
+.home-footer [data-stream-hint].is-static { visibility: hidden; }
 
 .projects-screen { display: grid; grid-template-columns: minmax(320px, 35%) 1fr; background: #080b10; }
 .projects-intro { position: relative; display: flex; flex-direction: column; justify-content: center; padding: clamp(32px, 6vw, 110px); overflow: hidden; border-right: 1px solid rgba(255, 255, 255, .07); background: radial-gradient(circle at 18% 82%, rgba(65, 88, 157, .16), transparent 35%), linear-gradient(145deg, #0c1017 0%, #080a0f 100%); }

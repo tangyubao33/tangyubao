@@ -46,9 +46,11 @@
 
 结构实现：`.group-meta` 横向 flex（`.group-mark` → `.group-identity` → `.group-divider` → `.group-copy`）；`.experience-group` 为两行网格，视觉第一行是作品卡（`1fr`）、第二行是经历信息（`auto`）；DOM 仍保持信息在前、卡片在后，用 `grid-row` 交换视觉顺序（不影响读屏语义）。作品卡 `height: 100%` 填满可伸缩行，避免行内留白把「封面 → 信息」拉远。`.group-meta` 用 CSS 变量 `--meta-air-top` / `--meta-air-bottom` 控制留白，**上 20px、下 60px**（`≤520px 高`横屏按比例降到 10 / 30，否则会把作品卡压得过矮）；行间距 `row-gap` 已并入上边距，所以 20 / 60 就是量出来的视觉间距（进度线自身占 3px，实测下间距 57px）。手机端 `.group-meta` 限宽 `calc(100vw - 40px)`，角色/负责信息可换行，避免被视口裁切。**手机端首页 hero 统一左对齐 + 字号比例（2026-11-16）**：`Project Design / Portfolio` 标题、`简历 & 个人作品集`、姓名/UI·UX DESIGNER/学历职位都从左侧 `20px` 起排，头像移到文字左侧（`order:-1`，`x=20`）；标题由 `--home-type: clamp(20px, 5.8vw, 26px)` 派生，简历与个人信息为其 **0.4 倍**（`calc(var(--home-type) * .4)`），头像为 36px。因此标题更突出、信息层级更轻：390 宽为 22.6 / 9.0px，320 宽为 20 / 8px，674 宽为 26 / 10.4px。桌面端仍保持标题左、个人信息右的两栏布局与原有字号，不受影响。
 
+**经历可见性（2026-11-19）**：`experiences` 里的经历可带 `hidden: true`（当前只有 `kingsoft` 金山办公 2016~2020）。隐藏的经历**不进首页作品流，也不进末页「其他项目」面板与手机预览的「其他项目」**，`#experience/kingsoft`、`#project/kingsoft/…` 等直达链接按无效路由回退首页并用 `replaceState` 规范化；数据、封面、作品页与「关于我」里的任职记录都保留，恢复展示只需删掉该字段。首页渲染统一走 `visibleExperiences()`，不要再直接 `Object.values(experiences)` 铺流。另外：作品流在宽屏可能完全不溢出（如 2560），此时 `syncStreamHint()` 给页脚 `[data-stream-hint]` 加 `.is-static` 把「SCROLL / DRAG TO EXPLORE」隐藏（保留占位、不跳版），避免提示无效操作。
+
 ### 3.2 卡片封面（首页小卡 + 项目页大卡共用一张）
 
-- 封面允许压缩，但分辨率必须够：首页卡与项目卡是竖长裁切，2× DPR 下约需 3000px 宽的源图才不糊，1600×900 会明显发虚。当前 `assets/thumbs/*.jpg` 统一为 **3200×1800 JPEG q84**（约 370–670 KB/张，五张在用合计约 2.4 MB）；作品内页不压缩，保持原始 3840×2160 PNG。
+- 封面允许压缩，但分辨率必须够：首页卡与项目卡是竖长裁切，2× DPR 下约需 3000px 宽的源图才不糊，1600×900 会明显发虚。当前 `assets/thumbs/*.jpg` 统一为 **3200×1800 JPEG q84**（约 370–670 KB/张，四张在流合计约 2.0 MB；金山封面保留但不上站）；作品内页不压缩，保持原始 3840×2160 PNG。
 - 抖音封面 `assets/thumbs/douyin-*.jpg`，来自 `2026 作品材料/作品网站图库/01 作品封面/` 的 5760×3240 设计稿：`抖音创作服务平台.jpg`、`抖音AI封面.jpg`、`抖音其他项目.jpg`、`个体AI转型探索.jpg`；金山办公使用 `金山办公.jpg`，均导出为 3200×1800 JPEG q84。当前封面同时作为作品第 1 页，更新封面会同步更新第 1 页与第一张缩略图。
 - 金山词霸使用最新金山设计稿压缩的 `mobile.jpg`。原京东数坊封面 `jd.jpg` 已随 37 页项目于 2026-11-19 删除（仅保留 `assets/marks/jd.webp` 供「关于我」使用）。
 - 卡片呈现统一 `object-fit: cover` 居中裁切；首页卡与项目页卡比例差异较大（首页卡约 0.59、横屏 1.31、项目页最窄约 0.25），保证封面中心内容落在裁切安全区。
@@ -60,7 +62,7 @@
   - 宽卡（aspect ≥ 0.8，如手机项目卡 / 横屏首页卡）：继续用 16:9 的 w640–w2560 变体，`sizes = max(宽度, 高度×16/9)`；
   - 在页面渲染后、screen 显示后与 resize 时重算（隐藏屏幕渲染时矩形为 0，必须等布局可见）；
   - **hover 展开用同一张 16:9 封面（单图层，无淡入层）**：有 hover 的桌面端，首页卡直接用 16:9 的 w640–w2560 `srcset`（`sizes = max(卡宽, 卡高×16/9)`，1440@2x 选 w1920）；静止竖卡显示的是这张 16:9 图的中心裁切，hover 展开成严格 16:9（741×417）时同一张图正好完整铺满，**不换源、不加第二层、没有淡入淡出**，所以不会闪、也不会出现“放大后消失”的中间图层。封面无任何 scale/位移（`transform:none`），离开 hover 只是卡片缩回，同一张图从完整封面渐回中心裁切。手机端（≤760px 或 `hover:none`）没有 hover，仍按实际裁切比例选图（竖卡用 crop0.8，横卡/矮屏用 16:9）。
- 实测 1440@2x：首页 5 张封面约 265KB（w720 档，清晰），项目页 4 张约 589KB（crop960，清晰）；不裁切方案要 1.5MB（首页）/3MB（项目页）才达到同等清晰度。
+ 实测 1440@2x：首页 4 张封面约 212KB（w720 档，清晰），项目页 4 张约 589KB（crop960，清晰）；不裁切方案要 1.5MB（首页）/3MB（项目页）才达到同等清晰度。
 - **卡片文字层**：顶部是项目名 + 页数/类型（`24 PAGES · EXPLORE` 或「项目资料整理中」），底部是序号 `01` + 类型（`PLATFORM · WEB`）；遮罩为「顶部强渐变 + 底部弱渐变」两层，hover 时整层透明度 .76 → .38；`PENDING` 角标位于项目名块下方 52px。**2026-11-15 调整**：顶部文字块内缩到 `top: 22px / left: 22px`（原来 13 / 15），并且项目名改用站点字体（`font-family: inherit`，Inter / PingFang SC 栈）——项目名里中英文混排（如「抖音AI封面」）此前中文走回退字体、Latin 走 Impact，两种字形混在一起；现在标题与下方页数行同字体（600 字重、`line-height 1.2`）。
 - **Safari / 微信 WebKit 封面重叠修复（2026-11-16）**：WebKit 计算 `.group-projects { width: max-content }` 时**不把「只有 `flex-basis`、没有 `width`」的卡片算进内在宽度**（实测项目容器宽被算成 0/27px），导致首页三组经历按信息块宽度排布、封面互相叠在一起（Chrome 正常）。修法是给 `.stream-project` 补上显式 `width: var(--stream-card-width)`，hover / focus-visible 展开时同步 `width: var(--expanded-card-width, var(--stream-card-width))` 并把 `width` 加进 `.65s cubic-bezier(.66,0,.2,1)` 过渡，这样分组宽度会随展开一起变宽（Safari 与 Chrome 实测几何完全一致）；`.is-returning` 期间 `width` 也要用 `!important` 钉回静止值。iPhone 微信（WKWebView）与 iPhone/桌面 Safari 均按此修复。
 - **hover 展开延迟 150ms（2026-11-16）**：指针停留在卡片上 **150ms** 后才添加 `.stream-project.is-expanded`、开始展开；首页所有 hover 视觉态（展开宽度、压暗其余封面、隐藏左上项目名、封面提亮、阴影）都改为由这个 class 驱动，**快速划过（含横向扫过整排）不会展开、不压暗**。键盘 `:focus-visible` 仍然即时展开；拖拽开始时会清掉展开状态，松手后对**鼠标**指针下的卡片重新计时（触摸拖拽不再重新 arm hover —— 之前手机滑动后卡片会在 150ms 后自己展开，整排跳动，2026-11-16 修）；**`hoverCapable()` = `(hover: hover) and (pointer: fine)`，手机上完全不 arm hover**（iOS Safari 在触摸后还会补发 `pointerType === "mouse"` 的兼容 pointer 事件，之前会再次把卡片展开成 16:9，2026-11-16 修）；离开卡片立即收起（收起不加延迟）。实现集中在 `script.js` 的 `setStreamExpanded / armStreamHover / resetHoverReveal` 与 `styles.css` 的 `.is-expanded` / `.is-hovering` 规则。
@@ -115,7 +117,7 @@
 - 缩略图数量少于 15 张且能在轨道内完整容纳时，右侧纵向轨道上下居中、竖屏底部横排左右居中（`is-short-list`）；放不下时仍从顶部/左侧开始滚动。
 - **缩略图资源（2026-11-16）**：`assets/slide-thumbs/` 统一为 WebP（q90，320×180 基线）并额外生成 `*.w240.webp`（q88，240×135）；`<img>` 使用 `srcset` 240/320 + `sizes="120px"` —— 桌面 2× 屏选 240（约 5KB/张），手机 3× 屏选 320；同时 `loading=lazy`、`decoding=async`、`fetchpriority=low`，打开预览时不再与大图抢带宽。
 - **页面链接热区**：页面可带 `links: [{ x, y, w, h, href, label }]`（百分比坐标），渲染为作品框内的透明 `<a target="_blank">`；悬停/聚焦显示浅色高亮，点击新窗口打开。翻页/层切换开始时清空、交接完成后重建；全屏下同样可点，且不会触发全屏翻页。详见 §3.11。
-- 最后一页其他项目：**只在真正的最后一页（封底页）出现**；底部滑出「其他项目」面板（隐藏时 `visibility: hidden` 且被舞台裁剪，平时不占布局、不影响大图尺寸），按经历顺序（抖音 → 金山办公）列出其他可预览项目；卡片从下往上逐个出现（index² 抛物线延迟）；点击用「缩略图 → 大图」克隆层过渡切换到该项目第 1 页；全屏下隐藏；滚轮在面板上横向滚动、不触发翻页。
+- 最后一页其他项目：**只在真正的最后一页（封底页）出现**；底部滑出「其他项目」面板（隐藏时 `visibility: hidden` 且被舞台裁剪，平时不占布局、不影响大图尺寸），按经历顺序（当前仅抖音可见；京东零售已下线、金山办公已隐藏，见 §6.10）列出其他可预览项目；卡片从下往上逐个出现（index² 抛物线延迟）；点击用「缩略图 → 大图」克隆层过渡切换到该项目第 1 页；全屏下隐藏；滚轮在面板上横向滚动、不触发翻页。
 - 最后一页避让：面板展开时必须为它预留高度——`sizeArtworkFrame()` 用 `otherProjectsReserve()`（`panel.offsetHeight + 14px`）压缩大图可用高度，并按居中公式把 `.artwork-stack` 上移（CSS 变量 `--stack-shift`），保证「大图 + 全屏按钮」整体落在面板上方（按钮距面板 14px）；与面板 550ms 同时动画（`.is-panel-adjusting` 期间给 `.artwork-frame` 加宽高过渡，栈位移本身有过渡）。**面板状态与翻页同时切换**：进入/离开末页时，面板滑入/滑出、作品框宽高过渡（550ms）与栈上移/复位都在翻页开始那一帧一起启动，形成一段连续运动；不再等翻页结束后再缩框，否则封底页落位后会再缩一次、看起来卡顿。`prefers-reduced-motion` 下关闭这些过渡。离开末页/进全屏时 reserve 归零并复位位移。短屏（`max-height: 520px`）面板同时压缩卡片与内边距，避免把大图挤得过小。
 
 ### 3.7 动效与过渡规范（全局）
@@ -236,7 +238,9 @@
 - **本地隔离**：`file://` 与 `localhost` 默认不启用（不发请求、不写队列），避免站主调试污染线上；自动化验收用 `?analytics_endpoint=<collector>` 显式开启。改 `analytics.js`/`script.js` 时同步提升 `?v=`。
 - **打开成功率探针**：`index.html` 里的内联小脚本独立上报 `boot_start / boot_ready / boot_fail`（不依赖 analytics.js，业务脚本 404/超时也能统计）；就绪判定 = 不再 `is-booting` 且首页有卡片/查看器已激活；10s 超时、`script.js` 加载失败、JS 错误分别记录；本地预览默认跳过。不得把它改成依赖主脚本或第三方 SDK，也不要在探针里采集额外个人信息。
 - **加载性能**：`page_load` 记录 load/DOM/传输/图片体积/请求数；`web_vitals` 记录 LCP/FCP/CLS/INP/TTFB；`artwork_load` 记录作品页图片选图→解码耗时（phase 分 initial/turn，不含 640ms 翻页动画）。聚合输出 `boot`、`artwork`、`resource_errors` 与 `vitals/load` 的 p75；看板「打开成功率 & 加载性能」板块消费这些字段。
-- **访问地域**：Worker 从 Cloudflare 边缘 `request.cf.country/region/city/continent` 取粗粒度地域并写入 D1（`0002_geo` 迁移新增 `region/city/continent` 列）；**原始 IP 不落库、不写日志**，客户端也不发送地域。聚合按会话去重输出 `geo`（国家/省州/城市），看板「访问地域」板块消费。城市精度受 Cloudflare 边缘库限制，可能为空。
+- **访问地域**：Worker 从 Cloudflare 边缘取粗粒度地域并写入 D1（`0002_geo` 新增 `region/city/continent`；`0003_asn` 新增 `asn`/`as_org`）；**原始 IP 不落库、不写日志**，客户端也不发送地域。聚合按会话去重输出 `geo`（国家/省州/城市），看板「访问地域」板块消费。城市精度受 Cloudflare 边缘库限制，可能为空。
+  - **口径**：地域是**上报那一刻出口 IP** 的归属，不是访客所在地——挂 WARP / VPN / 代理的访问会显示成出口节点所在国（实测站主自己的网络出口是 Cloudflare WARP：US San Jose / JP Tokyo / SG，于是 55 个会话全部记成 JP/US/SG、0 个 CN，这是「准确但不代表真实所在地」）；切换网络后批量上报的事件也可能记到新出口。
+  - **疑似代理出口（2026-11-18 加）**：`summary.js` 用 ASN 白名单（Cloudflare 13335、AWS、Google、Azure、DigitalOcean、Vultr、OVH、Hetzner、Oracle、阿里云、腾讯云、M247 等）+ 运营商关键字（cloudflare/warp/vpn/hosting/datacenter…）判定，输出 `geo.proxy_sessions`、每个国家/省州/城市的 `proxy`/`residential`、以及 `geo.proxy_orgs`。看板：多一个「疑似代理出口」统计卡；国家/省州/城市条形图里代理部分用**橙色叠加段**（hover 有详细数字，不塞长文案避免裁切）；下方列出出口运营商。旧版 Worker 无这些字段时看板显示「部署 0003 迁移后开始记录」，不报错。
 
 - **数据端**：`analytics/summary.js` 是唯一聚合实现（Worker/本地共用），看板只读 `/api/summary` 的 `{current, previous}`；新增作品同步 `PROJECTS` 注册表。改事件按「analytics.js → script.js → summary.js → dashboard.html → generate/make-sample → verify-summary」顺序执行并跑 `node analytics/tools/verify-summary.mjs`。
 - **运维**：`cd analytics/worker && wrangler deploy`；D1 备份 `wrangler d1 export`；删访客数据 `DELETE FROM events WHERE vid=…`；保留策略由 cron 清理；`workers.dev` 国内不稳时绑定自定义域名。
@@ -254,7 +258,7 @@
 
 - 平板竖屏（768–820 宽）时项目卡被拉成 0.25–0.38 的超窄长条，封面裁切严重 → 建议给 `.project-card` 限制最大宽高比（如不超过 1:2）。
 - 图片防盗只挡右键/长按/拖拽这类 casual 保存：截图、录屏、开发者工具、直接请求 `assets/` 地址仍能拿到原图。真要限制需要服务端鉴权或把大图切块/加水印，纯静态站点做不到。
-- 封面（`assets/thumbs/`）允许压缩，当前为 3200×1800 JPEG q84，约 370–670 KB/张（五张在用合计约 2.4 MB，首页会全部请求）；作品内页保留原始分辨率母版，同时提供 960/1280/1920/2560 四档 WebP q95 变体，查看器按屏幕需要加载（1440@1x ≈ 1280w，1440@2x ≈ 2560w，1920@2x/4K 全屏回退原图）。
+- 封面（`assets/thumbs/`）允许压缩，当前为 3200×1800 JPEG q84，约 370–670 KB/张（四张在流合计约 2.0 MB；金山封面保留但首页不请求）；作品内页保留原始分辨率母版，同时提供 960/1280/1920/2560 四档 WebP q95 变体，查看器按屏幕需要加载（1440@1x ≈ 1280w，1440@2x ≈ 2560w，1920@2x/4K 全屏回退原图）。
 - 有 11 个历史遗留、已无引用的 CSS 类（`card-enter`、`company-row`、`experience-card`、`experience-media`、`experience-projects`、`experience-timeline`、`project-caption`、`role-meta`、`timeline-line`、`timeline-shell` 等）可清理。
 - DIN Alternate 仅 macOS 系统自带，Windows/Android 会回退 Helvetica/Arial；若要求跨设备完全一致，需要打包 webfont（注意授权）。
 - 项目导航页左侧公司信息顺序仍是「图标 → 时间 → 公司」，首页是「时间 → 图标 → 公司」；如需统一可再调。
@@ -273,6 +277,7 @@
 - 京东数坊项目已于 2026-11-19 下线：首页与项目导航不再出现京东零售分组，37 页素材及封面/缩略图已从当前仓库删除（历史提交仍可追溯）；「关于我」弹窗中的京东履历文案保留。详见 §6.10。
 - 埋点已上线：`index.html` 的 `portfolio-analytics-endpoint` 指向 `https://tangyubao-analytics.tangweibao.workers.dev/collect`；Cloudflare Worker + D1（`tangyubao-analytics`，uuid `422352f9-91df-44b9-bbd8-f62df30dedf8`）已于 2026-11-16 部署并验证（`/health` 200、无令牌 401、测试事件入库后清理、`/api/summary` 正常）；`0002_geo` 迁移已应用，D1 增加 `region/city/continent` 列（由 Cloudflare 边缘写入，不存 IP）。
 - 看板令牌不写入仓库，本机保存在 `analytics/local/.data/dashboard-token.txt`（已 gitignore）；本地 `file://` / `localhost` 预览默认不上报，需显式加 `?analytics_endpoint=…`（或 `?analytics_force=1`）才会走线上 collector。
+- 「访问地域」当前显示 JP 55% / US 29% / SG 16%、没有 CN：**不是统计错误**，是站主网络走 Cloudflare WARP（出口 `104.28.x.x`，San Jose/Tokyo/Singapore），看板记录的是出口 IP。**2026-11-18 已部署**「疑似代理出口」识别：D1 用 `ALTER TABLE` 加了 `asn`/`as_org` 两列并补登 `d1_migrations`（0001–0003），Worker 升到 **1.2.0** 后 `/collect` 写入 `cf.asn`/`cf.asOrganization`；验收：测试事件（本机 WARP 出口）入库为 `country=US / San Jose / asn=13335 / as_org=Cloudflare, Inc.`，`/api/summary` 的 `geo.proxy_sessions=1`、`proxy_orgs=[Cloudflare, Inc.]`、US 的 `proxy=1`，随后已删除测试事件（0 条残留）。**历史 3,384 条事件没有 ASN，不会被标代理**，代理标记只对部署后的新访问生效；站主用当前网络打开一次作品集即可在「访问地域」看到「疑似代理出口 / Cloudflare, Inc.」。
 - 看板 `/api/summary` 的 Worker 查询是 `ORDER BY ts ASC LIMIT 30000`（60 天窗口）：事件超过 3 万条时会先截断**最旧**的一段，最新数据反而进不来（`meta.truncated` 会置 true，但看板没有显式提示）。建议改成 `ORDER BY ts DESC` 取最新再反转，并在看板提示截断；属未部署改动，下次 `wrangler deploy` 时一并处理。
 - `analytics/dashboard.html` 会随 GitHub Pages 公开（`noindex`），但不含真实数据；示例数据 `analytics/sample-summary.js` 是合成的，不能对外当业务结论。
 - 首屏图片已响应式（封面 16:9 WebP 640–2560 + 竖版裁切 crop0.8 720/960/1280，按卡片实际裁切比例选图）；Caveat 手写体已子集化（51KB → 2.5KB）；预览缩略图已 WebP + 240/320 `srcset`；预览首图直接加载 2560，加载期间显示既有「模糊遮罩 + spinner」，不再插入 1280 过渡（避免首屏发糊）。剩余可继续：① 变体改 AVIF（再省 25–35%）；② 国内访问把 `assets/` 放 Cloudflare R2 自定义域名或其它国内可达 CDN（GitHub Pages 走 Fastly，跨境 RTT 是剩余最大变量）；③ Service Worker 预缓存首屏资源，改善复访。详见 `analytics/体验分析报告.md`。
@@ -286,12 +291,12 @@
 
 - 站点保持纯静态、数据驱动的三屏结构：主页作品流、经历项目导航和作品查看器；内容统一从 `script.js` 的 `experiences` 维护。
 - 第一段经历的展示品牌为「抖音」，但历史路由 ID `douyin` 保持不变，避免破坏已有链接。
-- 抖音经历当前包含「抖音创作服务平台」「抖音AI封面」「抖音其他项目」「个人AI转型实践」四个真实项目；金山办公保留一个真实项目。京东数坊 37 页已于 2026-11-19 下线（含京东零售分组）；已移除的占位项目不再展示，但禁用项目和坏路由的兜底逻辑继续保留。
-- 「抖音其他项目」共 5 页：第 1 页为新增的「抖音其他项目」总览图（`other/00.png`），后续依次为原第 3、1、2、4 页。
+- 抖音经历当前包含「抖音创作服务平台」「抖音AI封面」「抖音其他项目」「个人AI转型实践」四个真实项目；京东数坊 37 页已于 2026-11-19 下线（含京东零售分组），金山办公（金山词霸）数据保留但 `hidden: true` 不上站（见 §3.1 与下方 2026-11-19 条）；已移除的占位项目不再展示，但禁用项目和坏路由的兜底逻辑继续保留。- 「抖音其他项目」共 5 页：第 1 页为新增的「抖音其他项目」总览图（`other/00.png`），后续依次为原第 3、1、2、4 页。
 - 「抖音创作服务平台」共 24 页：图库第 7–11、13–16、17–20、25–26 页分别合并为站内第 7、9、10、15 页的叠层页（层间原位渐隐渐现、进入从首层开始、缩略图取最终层），其余页顺延，映射见 §3.10。
 - 站点可见品牌文案统一为 `TANG YUBAO`（页脚）；页内图片左下角水印仍是设计稿烧进的 `TANG WEI BAO`，如需一致要重导设计稿（见 §5）。
 - 开场 6 页按「封面 → 宏观背景 → 现阶段问题 → 创作路径洞察 → 作者生命周期 → 三大方向」排布，对应图库页序 **1、2、5、3、6、4**；三大方向（图库 4）紧邻 STEP 1–3 章节，便于后续案例承接。
 - 抖音四个项目与金山词霸使用独立封面图（`assets/thumbs/douyin-*.jpg` / `mobile.jpg`，由 2026 图库封面设计稿压到 3200×1800 JPEG q84）。**当前封面同时作为各项目作品第 1 页**，首页与项目页共用同一封面。
+- **2026-11-19**：首页作品流与末页「其他项目」隐藏金山办公（2016~2020）经历及「金山词霸」作品——站主判断这段经历距今太远，不想再作为代表作品露出。做法：给 `kingsoft` 加 `hidden: true`，新增 `visibleExperiences()` 供首页渲染与 `otherProjectItems()` 使用；`handleRoute()` 把隐藏经历的 `#experience/kingsoft`、`#project/kingsoft/…` 当无效路由回退首页并 `replaceState`；「关于我」里的金山任职记录（2016.03~2020.03）保留，履历不断档；`index.html` 的 meta description 去掉金山办公；`home_view` 埋点的 `experiences` 改报可见经历数。顺带新增 `syncStreamHint()`：作品流在超宽屏（如 2560）完全不溢出时隐藏页脚「SCROLL / DRAG TO EXPLORE」（保留占位，2560 实测 `visibility: hidden`、1920 仍显示）。验收：1920/1440/1280/1024 首页均为 2 组经历 5 张封面、无横向溢出、`cardClipped` 为 0；`#experience/kingsoft` 与 `#project/kingsoft/kingsoft-powerword` 都落在 `#home`；桌面末页面板 4 项、手机预览「其他项目」4 项，均无金山词霸；「关于我」三段经历不变；`run-qa` / `verify-fixes` / `measure-home-layout` / `measure-projects` 通过（`run-qa` 手机段那条 `.thumbnail:nth-child(4)` 失败为改动前既有问题，基线一致）。恢复展示：删掉 `hidden: true` 即可。
 - **2026-11-17**：抖音创作服务平台末页（站内第 24 页，查看器 24/25）按图库 `抖音创作服务平台/36.jpg` 的最新版重出（当天两次修订依次落地）：① 案例区三块证据截图不再互相遮挡（creator-center 目录、Skill 改造需求清单、提效分析表并排）；②「传统开发工作流程（多角色协同）」前补上红色 `Before` 标签，交付效率文案恢复为「常规需求交付效率」。只重出该页 3840×2160 PNG 母版 `assets/works/bytedance/platform/35.png`、w960/w1280/w1920/w2560 四档 WebP q95 变体与 320×180 / 240×135 缩略图 `byte-platform-35(.w240).webp`，页数（24 页 + 封底）和图库→站内映射不变。注意：图库当前文件编号为 `1–28、30–36`（缺 29），站内按顺序 `01–35.png` 命名，站内第 24 页对应图库 `36.jpg`（第 n 页 → 站内第 n 页仅对 n ≤ 28 成立）。
 - **2026-11-16**：抖音创作服务平台封面改用图库最新设计稿（`2026 作品材料/作品网站图库/01 作品封面/抖音创作服务平台.jpg`，5760×3240），重新导出 `assets/thumbs/douyin-platform.jpg`（3200×1800 q84）与四档 WebP 变体，并同步重出 320×180 缩略图 `assets/slide-thumbs/byte-platform-01.webp`；首页卡、项目卡、查看器第 1 页与第一张缩略图一起更新。
 - **2026-11-14**：第一段经历的品牌文案由「字节跳动」改回「抖音」，图标由 `assets/marks/bytedance.webp` 换成 `assets/marks/douyin.webp`（首页经历组与项目页共用同一 logo 字段）；路由 ID `douyin`、项目名、素材目录 `assets/works/bytedance/` 均不变。
@@ -410,6 +415,13 @@
 
 - **2026-11-17**：修复看板「一直在读取数据中」。根因不是 Worker/D1 故障（`/health` 200、`token_configured` true、无令牌 401 正常），而是看板对 `/api/summary` 的 `fetch()` **没有超时**：该请求要跨境访问 `workers.dev`，实测本机 TLS 握手 2.3–2.7s、冷启动整包 3–9s（出口是本地代理 fake-ip `198.18.x.x`），链路一旦停滞，请求永不返回，页面就一直停在「正在读取数据…」。改动：① 每次请求 12s 硬超时（AbortController），超时/网络错误/401/500 都给出明确文案 + 「重试」按钮；② 等待超过 2.5s 时显示已等待秒数；③ 成功结果按时间范围缓存进 `localStorage`（`pf_dash_summary_v1`，只保留 7/14/30/90 四档），下次打开先渲染缓存再后台刷新——徽标「缓存数据 · 刷新中…」→「实时数据 · 最近 N 天 · 耗时」，刷新失败保留旧数据并标红「刷新失败」；④ 刷新/范围切换加 `loadSeq` 守卫，迟到的旧响应不覆盖新结果。验收（mock API + 真实 Worker）：正常 1.5s 出数、链路挂起 12.1s 转错误并保留缓存、无缓存 12.1s 回退示例数据、401/500 有重试、390 宽无横向溢出、7/14/30 各自缓存且切换正常。
 
+- **2026-11-18**：看板令牌改为**页面内联输入框**，不再用 `window.prompt`。原因是站主所在浏览器的内嵌环境不支持弹窗，报 `prompt() is not supported.`，看板拿到 401 后无法收令牌、直接退到示例数据。现在 401/503 时在提示条里渲染 `<form data-token-form>`（`type=password` 输入 + 「连接」按钮），提交后 `storeToken()` 写入内存（`state.token`，作为 sessionStorage 不可用时的兜底）再重新 `load()`；令牌无效会重新出现表单并提示「令牌无效或已失效」。错误文案统一去掉重复句号。验收：用 CDP 把 `window.prompt` 改为抛错来模拟该环境——首次 401 出现内联表单、错误令牌再次出现表单、正确令牌（mock 校验 Bearer）→「实时数据 · 最近 30 天 · 3ms」并写入缓存；真实 Worker + 禁用 prompt 同样只出现内联表单、无 `prompt() is not supported` 报错；390 宽表单不溢出。
+- **2026-11-18**：修复看板拿到真实数据却报 `Cannot read properties of undefined (reading 'per_open')`。根因是「体验诊断」里「简历下载转化低」那条读的是 `overview.about.per_open`，而 `overview` 只有 `resume_per_open`，`about` 段根本不在 overview 里——示例数据下载率 6.7% 不触发该分支，真实数据（55 会话、0 下载）触发，于是 render 抛错、整页退化成「连不上数据源」。改动：① 该处改用 `current.about.per_open`；② `render()` 拆成 `safeSection()` 逐板块 try/catch（KPI / 打开成功率 / 漏斗 / 趋势 / 首页 / 作品浏览 / 关于我 / 结构 / 地域 / 诊断），单块失败只在顶部提示「部分板块渲染失败（N）」+ 控制台堆栈，其余板块照常显示；③ `paint()` 先显示内容区再渲染，避免抛错时整页空白；④ 请求成功但渲染抛错时错误文案改为「数据已获取，但看板渲染出错」，不再谎报连不上。验收：用真实 `/api/summary`（3,384 事件 / 55 会话）渲染——10 个 KPI、5 条诊断全部正常、无报错；把 `about` 置 null 后只有「关于我」板块失败并提示、其余正常；真实 Worker + 真实令牌端到端 4.1s 出数。
+
+- **2026-11-18**：访问地域增加「疑似代理出口」识别与口径说明。起因：看板 30 天显示 JP 56.4% / US 27.3% / SG 16.4%、0 个 CN，站主判断「大部分应该来自中国」。排查确认：地理数据取的是 `request.cf` 的**出口 IP** 归属，站主整条网络走 Cloudflare WARP（实测出口 `104.28.166.42`、AS13335 Cloudflare、San Jose；此前窗口出现 Tokyo/Singapore 节点），原始事件最近 300 条只有 JP/SG，180 天全量同样无 CN——即「准确但会被代理误导」。改动：① `0003_asn` 迁移新增 `asn`/`as_org`，Worker `/collect` 写 `cf.asn`/`cf.asOrganization`（仍不存 IP）；② `summary.js` 增加 `PROXY_ASNS` 白名单 + 运营商关键字判定，`geo` 输出 `proxy_sessions`/`residential_sessions`/`proxy_orgs` 及各国家·省州·城市的 `proxy`/`residential`；③ 看板「访问地域」加口径说明、疑似代理出口统计卡、条形图橙色代理段（hover 显示数字）、出口运营商列表，未部署迁移时显示提示不报错；④ 示例数据生成器同步 asn/as_org（Cloudflare/Amazon 为代理，国内为联通/电信/移动），`verify-summary` 增加 4 条代理断言（40 项全过）。验收：示例数据 205/1098 会话判为代理、Cloudflare 176 + Amazon 29；旧版真实 payload 渲染不报错并提示待部署；站点 `verify-fixes` 回归通过。**Worker 部署待站主执行**（本机无 Cloudflare 凭据），步骤见 AGENTS §5。
+
+- **2026-11-18（部署）**：访问地域「疑似代理出口」功能上线。站主创建 Cloudflare API Token（需 Account · Workers Scripts **Edit** + Account · D1 **Edit**；只读 Token 会在 D1 写入和 `deploy` 时分别报 `7500` / `No access to the specified resource`），由本机用 `XDG_CONFIG_HOME=/tmp/wrangler-cfg` + `CLOUDFLARE_API_TOKEN` 跑 wrangler 4.164（`npx --cache /tmp/npm-cache …` 绕开 root 属主的 npm 缓存）。执行：`ALTER TABLE events ADD COLUMN asn INTEGER` / `ADD COLUMN as_org TEXT`、建 `d1_migrations` 并登记 0001–0003（避免以后 `migrations apply` 重跑 0002 报重复列）、`wrangler deploy` → Worker **1.2.0**、`token_configured` 仍为 true。验收见 §5。部署后 Token 应 Revoke/轮换（曾出现在对话里）。
+
 ### 6.9 手机端纵向布局上线（2026-11-17）
 
 - **发布记录**：手机竖屏（`≤760px`）纵向布局在本地分支 `feat/mobile-portrait` 完成（4 个提交：纵向布局、封面完整摊开、标题/间距/隐藏封面文字、主标题再放大），合并时远端 `main` 已前进 5 个提交（看板读取超时修复、抖音创作服务平台末页图更新等），因此先 `merge origin/main` 再上线；最终合并提交 `bfef3a4`，`main` 推送 `29e19bd..bfef3a4`，GitHub Pages 于 2026-11-17 15:31（CST）部署完成。线上版本号 `styles.css?v=20261117m4` / `script.js?v=20261117m4`；`origin` 已同步改为 `https://github.com/tangyubao33/tangyubao.git`（旧地址仅重定向）。
@@ -418,11 +430,11 @@
 
 ### 6.10 下线京东数坊项目（2026-11-19）
 
-- **内容**：按反馈移除「京东数坊平台 · 营销数据」全部 37 页作品。`script.js` 删除 `jdSlides` 与 `jd` 经历（京东零售在首页、项目导航中的分组一并移除，由于该经历只有这一个项目，保留分组会变成空壳）；作品流现为抖音 4 个 + 金山词霸 1 个，共 **5 张封面**。「关于我」弹窗中的京东零售履历与主要职责保留（属于简历信息，不是作品页）。
+- **内容**：按反馈移除「京东数坊平台 · 营销数据」全部 37 页作品。`script.js` 删除 `jdSlides` 与 `jd` 经历（京东零售在首页、项目导航中的分组一并移除，由于该经历只有这一个项目，保留分组会变成空壳）；作品流现为抖音 4 个（金山词霸仍 `hidden: true`，见下方 2026-11-19 条），共 **4 张封面**。「关于我」弹窗中的京东零售履历与主要职责保留（属于简历信息，不是作品页）。
 - **素材**：删除仅 JD 使用的素材并已核对无残留引用：`唐尉保作品集2_files/图片1–37.(png|jpg)` 母版 + 148 个 `.w960/.w1280/.w1920/.w2560.webp` 变体、`assets/slide-thumbs/jd-01–37.webp`（含 `.w240`，共 74 个）、`assets/thumbs/jd.jpg` 及 8 个封面变体，合计 **268 个文件 / 约 48.9 MB**；仅保留 `assets/marks/jd.webp`（「关于我」公司图标）。历史提交仍可追溯，但 GitHub Pages 当前部署不再提供这些文件。
 - **埋点**：`analytics/summary.js` 的 `PROJECTS` 与 `analytics/tools/generate.mjs` 移除 `jd/jd-shufang`，并用 `node analytics/tools/make-sample.mjs` 重新生成 `analytics/sample-summary.js`（演示数据不再含 JD）；线上 Worker 重新部署 `summary.js` 后，旧事件中的 JD 也不会再出现在项目列表。
 - **路由与降级**：`#experience/jd`、`#project/jd/jd-shufang` 按未知路由回退首页并 `replaceState` 到 `#home`；首页、项目页、查看器、「其他项目」面板均不再出现 JD。
-- **验收**：首页 2 段经历 5 张封面（桌面 + 手机）、手机预览连续平铺无缩略图、其他项目 4 项、旧 JD 链接回退首页、无 404 / 无 JS 报错；`script.js?v=20261119a` 升版。
+- **验收**：首页 1 段经历 4 张封面（桌面 + 手机）、手机预览连续平铺无缩略图、其他项目 3 项、旧 JD 链接回退首页、无 404 / 无 JS 报错；`script.js?v=20261119m2` 升版。
 
 ## 7. 手机端纵向布局（2026-11-17）
 
@@ -461,7 +473,7 @@
 
 ### 7.4 验收与回归
 
-- 手机（390×844 / 375×812 / 360×800 / 320×568 / 414×896 / 430×932）：无横向溢出（`document.body.scrollWidth === innerWidth`）、无 404、无 JS 报错；首页 5 张封面按 16:9 完整铺开、无文字层；标题字号加大且与首条经历间距约 52px；预览连续平铺、页码 01→25 正确、视频页可播放、叠层页状态齐全、热区可点；返回首页滚动位置恢复；旋转与跨断点重建正常。
+- 手机（390×844 / 375×812 / 360×800 / 320×568 / 414×896 / 430×932）：无横向溢出（`document.body.scrollWidth === innerWidth`）、无 404、无 JS 报错；首页 4 张封面按 16:9 完整铺开、无文字层；标题字号加大且与首条经历间距约 52px；预览连续平铺、页码 01→25 正确、视频页可播放、叠层页状态齐全、热区可点；返回首页滚动位置恢复；旋转与跨断点重建正常。
 - 桌面回归：1920×1080 / 1440×900 / 1280×800 / 1024×768 / 768×1024 与改动前逐像素对比，除 1px 渐变分隔线的亚像素噪点外完全一致。
 - 手机横屏（844×390）仍走原 `max-height:520` 紧凑横屏布局（横向流 + 单帧预览 + 缩略图），与旧版一致。
 

@@ -63,7 +63,8 @@ http://127.0.0.1:8788/?analytics_endpoint=http%3A%2F%2F127.0.0.1%3A8788%2Fcollec
 | 关于我打开率 | 打开过弹窗的会话 / 全部会话 | 两个入口合并 |
 | 简历下载 | 点击 `.about-download` 的次数 / 会话 | 是「下载意图」；浏览器是否落盘无法判断 |
 | 下载 / 关于我 | 下载次数 / 关于我打开次数 | 衡量弹窗内转化 |
-| 访问国家 / 省州 / 城市 | 按会话去重的地域分布 | Cloudflare 边缘从访问 IP 解析后只存粗粒度字段，**不存 IP** |
+| 访问国家 / 省州 / 城市 | 按会话去重的地域分布 | Cloudflare 边缘从访问 IP 解析后只存粗粒度字段，**不存 IP**；记录的是**上报时出口 IP** 的归属，挂代理/VPN 会显示出口国 |
+| 疑似代理出口 | 出口 ASN / 运营商属于云厂商、WARP、VPN 的会话数 | Worker 额外保存 `cf.asn` / `cf.asOrganization`（0003 迁移），按 ASN 白名单 + 运营商关键字判定；这些会话的国家/城市只是节点所在地 |
 | 网页打开成功率 | `boot_ready` / `boot_start` | 内联启动探针统计，独立于 analytics.js；超时/关键脚本失败计失败 |
 | 应用就绪耗时 | `boot_ready.duration_ms` | 导航开始 → 首页/查看器渲染完成；p75、慢打开率（>3s） |
 | 打开失败原因 | `boot_fail.reason` | timeout / js_error / script_error / incomplete |
@@ -131,7 +132,7 @@ npx wrangler@4 login
 # 2) 建 D1 数据库，把输出的 database_id 填进 wrangler.toml
 npx wrangler@4 d1 create tangyubao-analytics
 
-# 3) 建表 / 应用迁移（0001 初始表，0002 增加地域字段）
+# 3) 建表 / 应用迁移（0001 初始表，0002 地域字段，0003 出口 ASN / 运营商）
 npx wrangler@4 d1 migrations apply tangyubao-analytics --remote
 
 # 4) 设置看板令牌（自己生成一个长随机串，别用弱口令）
@@ -145,7 +146,7 @@ npx wrangler@4 deploy
 
 ```bash
 curl -s https://<worker>/health
-# {"ok":true,"version":"1.0.0","token_configured":true,...}
+# {"ok":true,"version":"1.2.0","token_configured":true,...}
 
 curl -s -X POST https://<worker>/collect \
   -H 'Content-Type: text/plain' \
@@ -175,7 +176,7 @@ curl -s 'https://<worker>/api/summary?days=7&token=<DASHBOARD_TOKEN>' | head -c 
 https://tangyubao33.github.io/tangyubao/analytics/dashboard.html
 ```
 
-首次会提示输入 `DASHBOARD_TOKEN`，存在 `sessionStorage`，同一标签页刷新无需再输。手机/新浏览器可以收藏带令牌的一次性链接：
+首次会在页面顶部出现一条红色提示 + **内联输入框**，粘贴 `DASHBOARD_TOKEN` 点「连接」即可（令牌存在内存与 `sessionStorage`，同一标签页刷新无需再输）。这里不用浏览器弹窗（`window.prompt`）——内嵌 webview / 部分受限浏览器不支持它，会直接报 `prompt() is not supported.` 并退到示例数据。手机/新浏览器也可以收藏带令牌的一次性链接：
 
 ```
 https://tangyubao33.github.io/tangyubao/analytics/dashboard.html#token=<DASHBOARD_TOKEN>
@@ -263,10 +264,11 @@ node --check script.js
     funnel: { browse: [...], convert: [...] },
     devices: [{ name, sessions, pct, viewer_opens, bounce_rate, completion_rate, avg_depth_pct }],
     referrers: [{ name, sessions, pct }],
-    geo: { samples, unknown,
-           countries: [{ code, sessions, pct }],
-           regions: [{ country, region, sessions, pct }],
-           cities: [{ country, region, city, sessions, pct }] },
+    geo: { samples, unknown, proxy_sessions, residential_sessions,
+           countries: [{ code, sessions, pct, proxy, residential }],
+           regions: [{ country, region, sessions, pct, proxy, residential }],
+           cities: [{ country, region, city, sessions, pct, proxy, residential }],
+           proxy_orgs: [{ name, sessions, pct }] },
     vitals: { samples, lcp_p75, fcp_p75, load_p75, cls_p75, inp_p75, ttfb_p75 },
     load: { samples, avg_transfer_kb, avg_image_kb, avg_load_ms, avg_resources,
             load_p75_ms, dom_p75_ms, transfer_kb_p75, image_kb_p75, resources_p75 },
@@ -333,9 +335,13 @@ npx wrangler@4 secret put DASHBOARD_TOKEN
 | 线上看板一直「示例数据」 | `?api=` 地址是否带协议；Worker 是否部署；控制台是否有 CORS/网络错误；换个网络试 `workers.dev` |
 | 看板一直「正在读取数据…」/ 无限转圈 | 旧版本没有超时会这样，现在最多 12 秒就会报「请求超时」+ 重试。反复超时基本是当前网络到 `workers.dev` 跨境不通：换网络、关掉代理再试，或给 Worker 绑自定义域名（见 §4.3）；也可以用 `?api=` 指向本地 collector |
 | 看板徽标「缓存数据 · 刷新中…」 | 缓存优先：先显示上次成功的结果，后台再请求 `/api/summary`；刷新完成变「实时数据 · 最近 N 天 · 耗时」，失败变红字「刷新失败」但保留旧数据 |
-| 看板提示需要令牌 / 401 | 输入 `DASHBOARD_TOKEN`；或用 `#token=...` 打开；确认 `wrangler secret` 已生效（重新 deploy 不必，secret 立即生效） |
+| 看板报 `Cannot read properties of undefined (reading '…')` | 旧版某块渲染出错会让整页失败。现在每个板块独立渲染，出错只在顶部提示是哪一块（控制台有堆栈），其余照常显示；刷新到最新版即可 |
+| 看板提示需要令牌 / 401 | 在页面顶部红色提示里粘贴 `DASHBOARD_TOKEN` 点「连接」（内联表单，不依赖弹窗）；或用 `#token=...` 打开；确认 `wrangler secret` 已生效（重新 deploy 不必，secret 立即生效） |
+| 以前报 `prompt() is not supported.` | 旧版用浏览器弹窗问令牌，内嵌 webview 不支持；现已改为页面内联输入框，强刷后即可粘贴令牌 |
 | 有访问但没有事件 | 打开站点控制台看 `[analytics]` 日志；确认 meta/`ANALYTICS_ENDPOINT` 已填；DNT 是否开启；`/health` 是否 200 |
 | 事件有重复 | 客户端每个事件有唯一 `id`，服务端 `INSERT OR IGNORE` 去重；看聚合按 `id` 去重 |
+| 访问地域大部分是日本 / 美国 / 新加坡 | 这是出口 IP，不是访客所在地：站主自己的网络如果挂了 WARP / VPN / 代理，访问会被记成节点所在国。部署 `0003_asn` 迁移 + 新版 Worker 后，看板会把这类会话标成「疑似代理出口」（橙色条 + 运营商列表）；想验证，用手机 4G 直连打开一次作品集应出现 CN |
+| 访问地域里没有任何中国 | 同上：说明这段时间没有从中国大陆 IP 直接上报的访问（都是代理/机房出口，或还没有国内访客）。可在代理里给 `tangyubao33.github.io`、`*.workers.dev` 设直连再打开一次作品集 |
 | 点击/曝光数对不上 | 曝光有 50%+500ms 门槛；快速划过不计；深链打开作品不产生曝光 |
 | 移动端榜单/图表溢出 | 看板最大宽度 1320px、表格横向可读；如仍异常，把浏览器宽度和截图发我 |
 | 想只统计某些页面 | 在 `script.js` 的 `track()` 调用处加条件，或看板按 screen 扩展筛选 |

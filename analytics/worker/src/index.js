@@ -14,7 +14,7 @@
  */
 import { buildComparison } from "../../summary.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.2.0";
 const MAX_BODY_BYTES = 128 * 1024;
 const MAX_EVENTS = 80;
 const MAX_PROPS_BYTES = 2400;
@@ -125,13 +125,16 @@ async function collect(request, env) {
   const region = cf.region ? String(cf.region).slice(0, 60) : "";
   const city = cf.city ? String(cf.city).slice(0, 60) : "";
   const continent = cf.continent ? String(cf.continent).slice(0, 4) : "";
+  // ASN / 运营商只用于判断「是不是 WARP / 云厂商 / VPN 出口」，不存 IP。
+  const asn = Number(cf.asn) || 0;
+  const asOrg = cf.asOrganization ? String(cf.asOrganization).slice(0, 80) : "";
   const rows = Array.isArray(payload.events) ? payload.events.slice(0, MAX_EVENTS) : [];
   const statements = [];
   rows.forEach((event) => {
     if (!validEvent(event, now)) return;
     const ts = Number(event.ts);
     statements.push(env.DB.prepare(
-      "INSERT OR IGNORE INTO events (id, ts, received_at, site, name, sid, vid, pid, screen, props, country, region, city, continent, day) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO events (id, ts, received_at, site, name, sid, vid, pid, screen, props, country, region, city, continent, asn, as_org, day) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       String(event.id).slice(0, 90),
       Math.round(ts),
@@ -147,6 +150,8 @@ async function collect(request, env) {
       region,
       city,
       continent,
+      asn,
+      asOrg,
       new Date(ts).toISOString().slice(0, 10)
     ));
   });
@@ -170,7 +175,7 @@ async function summary(request, env, url) {
   const now = Date.now();
   const from = now - days * 86400000 * 2; // current + comparison window
   const result = await env.DB.prepare(
-    "SELECT id, ts, sid, vid, pid, screen, name, props, country, region, city, continent FROM events WHERE site = ? AND ts >= ? AND ts < ? ORDER BY ts ASC LIMIT ?"
+    "SELECT id, ts, sid, vid, pid, screen, name, props, country, region, city, continent, asn, as_org FROM events WHERE site = ? AND ts >= ? AND ts < ? ORDER BY ts ASC LIMIT ?"
   ).bind(site, Math.round(from), Math.round(now + 60000), MAX_ROWS).all();
   const rows = result.results || [];
   const comparison = buildComparison(rows, { days, to: now });
@@ -189,7 +194,7 @@ async function raw(request, env, url) {
   const limit = Math.max(1, Math.min(300, Number(url.searchParams.get("limit")) || 100));
   const site = (url.searchParams.get("site") || env.SITE_ID || "tangyubao-portfolio").slice(0, 80);
   const result = await env.DB.prepare(
-    "SELECT id, ts, sid, vid, pid, screen, name, props, country, region, city, continent, received_at FROM events WHERE site = ? ORDER BY received_at DESC LIMIT ?"
+    "SELECT id, ts, sid, vid, pid, screen, name, props, country, region, city, continent, asn, as_org, received_at FROM events WHERE site = ? ORDER BY received_at DESC LIMIT ?"
   ).bind(site, limit).all();
   return json({ ok: true, events: (result.results || []).map((row) => Object.assign({}, row)) });
 }

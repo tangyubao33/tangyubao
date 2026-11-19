@@ -63,7 +63,9 @@ function normalize(event) {
     country: String(event.country || ""),
     region: String(event.region || ""),
     city: String(event.city || ""),
-    continent: String(event.continent || "")
+    continent: String(event.continent || ""),
+    asn: Number(event.asn) || 0,
+    as_org: String(event.as_org || "")
   };
 }
 
@@ -78,6 +80,35 @@ function hostOf(ref) {
 
 function bound(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+/* 「访问地域」记录的是 Cloudflare 边缘看到的**出口 IP** 归属。经由 WARP、
+ * 云厂商或 VPN 出口的访问，出口国只是节点所在地，不代表访客真实所在地。
+ * 这里用 ASN 白名单 + 运营商关键字把这类会话标出来，看板据此提示「疑似代理」。 */
+const PROXY_ASNS = new Set([
+  13335, // Cloudflare (WARP / 1.1.1.1)
+  16509, 14618, 8987, 38895, // Amazon / AWS
+  15169, 396982, 19527, 139070, // Google
+  8075, 8068, 8069, 12076, // Microsoft / Azure
+  14061, // DigitalOcean
+  63949, 20940, // Linode / Akamai
+  20473, 64515, // Vultr / Choopa
+  16276, // OVH
+  24940, 213230, // Hetzner
+  31898, // Oracle Cloud
+  45102, 45103, 24429, // Alibaba Cloud
+  132203, 45090, // Tencent Cloud
+  9009, // M247（大量 VPN 使用）
+  53667, 40676, 46844, 29802, 43350, 61317, 21859, 49505
+]);
+
+const PROXY_ORG_PATTERN = /cloudflare|warp|amazon|aws|google|microsoft|azure|digitalocean|linode|akamai|vultr|choopa|ovh|hetzner|oracle|alibaba|aliyun|tencent cloud|huawei cloud|m247|nordvpn|expressvpn|surfshark|proxy|vpn|hosting|datacenter|data center|colo(cation)?|server|cloud/i;
+
+function isProxyExit(asn, asOrg) {
+  const number = Number(asn) || 0;
+  if (number && PROXY_ASNS.has(number)) return true;
+  const org = String(asOrg || "");
+  return org ? PROXY_ORG_PATTERN.test(org) : false;
 }
 
 function trackBootEventFactory(boots) {
@@ -206,7 +237,9 @@ export function buildSummary(rawRows, options = {}) {
           country: event.country,
           region: event.region,
           city: event.city,
-          continent: event.continent
+          continent: event.continent,
+          asn: event.asn,
+          as_org: event.as_org
         });
       }
     }
@@ -633,34 +666,59 @@ export function buildSummary(rawRows, options = {}) {
   const geoCountries = new Map();
   const geoRegions = new Map();
   const geoCities = new Map();
+  const geoProxyOrgs = new Map();
   let geoKnown = 0;
+  let proxySessions = 0;
+  const bump = (map, key, isProxy) => {
+    const entry = map.get(key) || { sessions: 0, proxy: 0 };
+    entry.sessions += 1;
+    if (isProxy) entry.proxy += 1;
+    map.set(key, entry);
+  };
   geoBySession.forEach((geo) => {
     if (!geo.country && !geo.region && !geo.city) return;
     geoKnown += 1;
+    const isProxy = isProxyExit(geo.asn, geo.as_org);
+    if (isProxy) {
+      proxySessions += 1;
+      const label = String(geo.as_org || (geo.asn ? "AS" + geo.asn : "") || "未知出口").slice(0, 60);
+      geoProxyOrgs.set(label, (geoProxyOrgs.get(label) || 0) + 1);
+    }
     const countryCode = String(geo.country || "").toUpperCase();
-    if (countryCode) geoCountries.set(countryCode, (geoCountries.get(countryCode) || 0) + 1);
+    if (countryCode) bump(geoCountries, countryCode, isProxy);
     const regionKey = `${countryCode}|${geo.region || ""}`;
-    if (geo.region || countryCode) geoRegions.set(regionKey, (geoRegions.get(regionKey) || 0) + 1);
+    if (geo.region || countryCode) bump(geoRegions, regionKey, isProxy);
     const cityKey = `${countryCode}|${geo.region || ""}|${geo.city || ""}`;
-    if (geo.city || geo.region || countryCode) geoCities.set(cityKey, (geoCities.get(cityKey) || 0) + 1);
+    if (geo.city || geo.region || countryCode) bump(geoCities, cityKey, isProxy);
+  });
+  const geoStats = (entry) => ({
+    sessions: entry.sessions,
+    pct: pct(entry.sessions, sessionCount),
+    proxy: entry.proxy,
+    residential: entry.sessions - entry.proxy
   });
   const geo = {
     samples: geoKnown,
     unknown: Math.max(0, sessionCount - geoKnown),
+    proxy_sessions: proxySessions,
+    residential_sessions: Math.max(0, geoKnown - proxySessions),
     countries: [...geoCountries.entries()]
-      .map(([code, sessions]) => ({ code, sessions, pct: pct(sessions, sessionCount) }))
+      .map(([code, entry]) => Object.assign({ code }, geoStats(entry)))
       .sort((a, b) => b.sessions - a.sessions),
     regions: [...geoRegions.entries()]
-      .map(([key, sessions]) => {
+      .map(([key, entry]) => {
         const [country, region] = key.split("|");
-        return { country, region, sessions, pct: pct(sessions, sessionCount) };
+        return Object.assign({ country, region }, geoStats(entry));
       })
       .sort((a, b) => b.sessions - a.sessions),
     cities: [...geoCities.entries()]
-      .map(([key, sessions]) => {
+      .map(([key, entry]) => {
         const [country, region, city] = key.split("|");
-        return { country, region, city, sessions, pct: pct(sessions, sessionCount) };
+        return Object.assign({ country, region, city }, geoStats(entry));
       })
+      .sort((a, b) => b.sessions - a.sessions),
+    proxy_orgs: [...geoProxyOrgs.entries()]
+      .map(([name, sessions]) => ({ name, sessions, pct: pct(sessions, proxySessions) }))
       .sort((a, b) => b.sessions - a.sessions)
   };
 

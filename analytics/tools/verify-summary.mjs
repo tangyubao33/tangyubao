@@ -50,6 +50,9 @@ check("dashboard contract keys", ["overview", "daily", "projects", "about", "hom
 check("geo samples > 0", current.geo.samples > 0, String(current.geo.samples));
 check("geo countries/regions/cities present", current.geo.countries.length > 0 && current.geo.regions.length > 0 && current.geo.cities.length > 0);
 check("geo pct in range", current.geo.countries.every((item) => item.pct >= 0 && item.pct <= 100));
+check("geo proxy fields present", typeof current.geo.proxy_sessions === "number" && Array.isArray(current.geo.proxy_orgs));
+check("geo proxy <= samples", current.geo.proxy_sessions <= current.geo.samples, `${current.geo.proxy_sessions}/${current.geo.samples}`);
+check("geo countries carry proxy/residential", current.geo.countries.every((item) => item.proxy >= 0 && item.residential >= 0 && item.proxy + item.residential === item.sessions));
 check("boot attempts >= successes", current.boot.attempts >= current.boot.successes, `${current.boot.successes}/${current.boot.attempts}`);
 check("boot success rate in range", current.boot.success_rate >= 0 && current.boot.success_rate <= 100, String(current.boot.success_rate));
 check("boot failure reasons reported", current.boot.fail_reasons.length > 0);

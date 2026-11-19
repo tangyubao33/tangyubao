@@ -553,6 +553,10 @@ const experiences = {
   },
   kingsoft: {
     id: "kingsoft",
+    // 2016~2020 的经历距今年代较远，不再在首页作品流与末页「其他项目」里露出；
+    // 数据整段保留（含封面与 10 页作品），「关于我」里的任职经历也继续显示。
+    // 恢复展示只需删掉这一行。
+    hidden: true,
     period: "2016~2020",
     company: "金山办公",
     mark: "W",
@@ -575,6 +579,12 @@ const experiences = {
     ]
   }
 };
+
+// Experiences flagged `hidden` stay in the data (assets, routes and the About
+// dialog keep working) but are not listed on the home stream or in the closing
+// "other projects" panels.
+const visibleExperiences = () => Object.values(experiences).filter((experience) => !experience.hidden);
+const isVisibleExperience = (id) => Boolean(experiences[id] && !experiences[id].hidden);
 
 // The current project cover is also the first viewer page. Keeping the cover
 // and page 1 identical makes the card-to-viewer handoff seamless and avoids
@@ -651,6 +661,7 @@ const elements = {
   otherProjects: document.querySelector("[data-other-projects]"),
   streamShell: document.querySelector("[data-stream-shell]"),
   streamProgress: document.querySelector("[data-stream-progress]"),
+  streamHint: document.querySelector("[data-stream-hint]"),
   viewerBackLabel: document.querySelector("[data-viewer-back-label]"),
   mobileGallery: document.querySelector("[data-mobile-gallery]")
 };
@@ -1329,7 +1340,7 @@ function startHomeEngagement() {
   const session = analytics?.session?.() || {};
   track("home_view", {
     cards: elements.timeline.querySelectorAll(".stream-project").length,
-    experiences: Object.keys(experiences).length,
+    experiences: visibleExperiences().length,
     visitor_new: visitor.new,
     session_new: session.new,
     returning: visitor.new === false,
@@ -1414,7 +1425,7 @@ function checkCardImpressions() {
 }
 
 function renderTimeline() {
-  elements.timeline.innerHTML = Object.values(experiences).map((experience, experienceIndex) => `
+  elements.timeline.innerHTML = visibleExperiences().map((experience, experienceIndex) => `
     <section class="experience-group" style="--accent:${experience.accent};--mark-bg:${experience.markBg}">
       <header class="group-meta">
         <span class="group-mark${experience.logo ? " has-logo" : ""}" aria-hidden="true">${experience.logo ? `<img src="${experience.logo}" alt="" loading="lazy" decoding="async">` : experience.mark}</span>
@@ -1479,7 +1490,7 @@ function renderProjects() {
 function otherProjectItems() {
   const currentExperienceId = state.experienceId;
   const currentProjectId = state.projectId;
-  return Object.values(experiences).flatMap((experience) =>
+  return visibleExperiences().flatMap((experience) =>
     experience.projects
       .filter((project) => !project.disabled && project.slides?.length)
       .map((project) => ({ experience, project }))
@@ -3106,8 +3117,8 @@ function handleRoute() {
   if (parts[0] === "project" && parts[1] && parts[2]) {
     const experience = experiences[parts[1]];
     const project = experience?.projects.find((item) => item.id === parts[2]);
-    if (!experience || !project || project.disabled) {
-      if (experience) {
+    if (!experience || experience.hidden || !project || project.disabled) {
+      if (experience && !experience.hidden) {
         openExperience(parts[1], false);
         history.replaceState(null, "", `#experience/${parts[1]}`);
       } else {
@@ -3118,7 +3129,7 @@ function handleRoute() {
     }
     state.experienceId = parts[1];
     openProject(parts[2], false);
-  } else if (parts[0] === "experience" && parts[1] && experiences[parts[1]]) {
+  } else if (parts[0] === "experience" && parts[1] && isVisibleExperience(parts[1])) {
     openExperience(parts[1], false);
   } else {
     goHome(false);
@@ -3306,6 +3317,14 @@ function measureStreamAccordion() {
   });
 }
 
+function syncStreamHint() {
+  // With fewer visible experiences the row can fit a wide screen completely;
+  // then "SCROLL / DRAG TO EXPLORE" would promise an interaction that does
+  // nothing. Keep the slot (grid stays balanced) and only hide the text.
+  if (!elements.streamHint) return;
+  elements.streamHint.classList.toggle("is-static", !(stream.max > 0));
+}
+
 function measureStream() {
   // Phones use the vertical CSS layout; there is no horizontal offset to measure.
   if (isMobileLayout()) {
@@ -3313,6 +3332,7 @@ function measureStream() {
     stream.max = 0;
     stream.dirty = false;
     elements.timeline.style.transform = "";
+    syncStreamHint();
     return;
   }
   measureStreamAccordion();
@@ -3332,6 +3352,7 @@ function measureStream() {
     return { element, center: rect.left + rect.width / 2 - trackRect.left, width: rect.width };
   });
   stream.dirty = false;
+  syncStreamHint();
 }
 
 function applyStream() {
