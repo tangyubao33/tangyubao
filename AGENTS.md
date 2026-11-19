@@ -435,6 +435,7 @@
 - **埋点**：`analytics/summary.js` 的 `PROJECTS` 与 `analytics/tools/generate.mjs` 移除 `jd/jd-shufang`，并用 `node analytics/tools/make-sample.mjs` 重新生成 `analytics/sample-summary.js`（演示数据不再含 JD）；线上 Worker 重新部署 `summary.js` 后，旧事件中的 JD 也不会再出现在项目列表。
 - **路由与降级**：`#experience/jd`、`#project/jd/jd-shufang` 按未知路由回退首页并 `replaceState` 到 `#home`；首页、项目页、查看器、「其他项目」面板均不再出现 JD。
 - **验收**：首页 1 段经历 4 张封面（桌面 + 手机）、手机预览连续平铺无缩略图、其他项目 3 项、旧 JD 链接回退首页、无 404 / 无 JS 报错；`script.js?v=20261119m2` 升版。
+- **上线（2026-11-19）**：推送前远端 `main` 已前进 5 个提交（看板 1.2.0 / 代理识别 / 金山经历 `hidden` 等），本地先合并再推送，最终提交 `4896eea`（`57d3869..4896eea`）；GitHub Pages 部署后线上 `script.js?v=20261119m2`。线上复核：首页仅「抖音」1 段经历 4 张封面、末页「其他项目」3 项、全站无京东/金山字样；`#project/jd/jd-shufang` 与 `#experience/kingsoft` 都回退 `#home`；`assets/thumbs/jd.jpg`、`assets/slide-thumbs/jd-01.webp` 等旧地址已不再返回图片（GitHub Pages 对不存在路径返回 404/503）。
 
 ## 7. 手机端纵向布局（2026-11-17）
 
