@@ -47,16 +47,6 @@ const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
 const isMobileLayout = () => mobileLayoutQuery.matches;
 analytics?.pageView?.();
 
-const jdSlides = Array.from({ length: 37 }, (_, index) => {
-  const number = index + 1;
-  const extension = [22, 33].includes(number) ? "jpg" : "png";
-  return {
-    src: `${assetRoot}/图片${number}.${extension}`,
-    thumb: `assets/slide-thumbs/jd-${pad(number)}.webp`,
-    alt: `京东数坊案例第 ${number} 页`
-  };
-});
-
 const kingsoftPages = [30, 31, 32, 33, 34, 35, 37, 38, 40, 41];
 const kingsoftSlides = kingsoftPages.map((number, index) => ({
   src: `${assetRoot}/C端${number}.png`,
@@ -196,8 +186,7 @@ const pickSlideSource = (slide) => {
   return base;
 };
 
-// Legacy JD / Kingsoft pages also get responsive variants.
-jdSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); });
+// The legacy Kingsoft pages also get responsive variants.
 kingsoftSlides.forEach((slide) => { slide.variants = slideVariants(slide.src); });
 
 /* Keep the next few pages decoded before they are needed. Merely warming the
@@ -559,29 +548,6 @@ const experiences = {
         description: "AI 工具与个人工作流实践",
         cover: "assets/thumbs/douyin-ai-practice.jpg",
         slides: bytedanceAiPracticeSlides
-      }
-    ]
-  },
-  jd: {
-    id: "jd",
-    period: "2020~2022",
-    company: "京东零售",
-    mark: "JD",
-    logo: "assets/marks/jd.webp",
-    accent: "#ed2630",
-    markBg: "#ed2630",
-    role: "资深体验设计师",
-    meta: "数坊项目设计负责人",
-    caption: "项目主导与管理",
-    projectNames: ["京东数坊平台 · 营销数据"],
-    projects: [
-      {
-        id: "jd-shufang",
-        name: "京东数坊平台 · 营销数据",
-        type: "DATA PRODUCT · B2B",
-        description: "融合营销数据产品与复杂信息体验",
-        cover: "assets/thumbs/jd.jpg",
-        slides: jdSlides
       }
     ]
   },
@@ -3578,8 +3544,8 @@ window.addEventListener("scroll", () => scheduleImpressionCheck(200), { passive:
 /* The accordion grows the hovered card to 16:9 to the right, so a card that
    sits near the right edge would expand out of the viewport and stay clipped.
    Follow the hovered card the same way keyboard focus already does, and allow
-   the pan to exceed the resting bound only while a single-project group (JD /
-   Kingsoft) is actually wide open; leaving the card clamps it back so the
+   the pan to exceed the resting bound only while a single-project group
+   (Kingsoft) is actually wide open; leaving the card clamps it back so the
    stream never exposes blank space where the wider card used to be. */
 /* Keyboard focus still pans the stream so a tabbed-to card is not left
    off-screen. Mouse hover does not pan at all: the opened card grows from its
